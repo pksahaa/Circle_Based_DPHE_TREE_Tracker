@@ -371,9 +371,56 @@ tr:hover td{background:#f8fdf8}
   <div id="login-type-hint" style="font-size:11px;color:#888;margin:-6px 0 12px 2px;display:none"></div>
 
   <button class="btn-login" id="login-submit-btn" onclick="doLogin()">🔐 Sign in</button>
-  <p style="font-size:11px;color:#aaa;text-align:center;margin-top:14px">🔒 Secured by Google Sheets + Apps Script backend</p>
+  <p style="text-align:center;margin-top:12px">
+    <a href="javascript:void(0)" onclick="openForgotPasswordModal()" style="font-size:12px;color:#1976d2;text-decoration:none;font-weight:600">🔑 পাসওয়ার্ড ভুলে গেছেন? — Forgot Password?</a>
+  </p>
+  <p style="font-size:11px;color:#aaa;text-align:center;margin-top:10px">🔒 Secured by Google Sheets + Apps Script backend</p>
 </div>
 </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div id="forgot-pw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:800;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;max-width:400px;margin:60px auto;padding:26px;position:relative">
+    <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:4px">🔑 পাসওয়ার্ড রিসেট করুন</div>
+    <div style="font-size:12px;color:#888;margin-bottom:16px">Reset your password using a code sent to your email.</div>
+
+    <div id="fpw-alert" class="alert alert-error" style="margin-bottom:12px"></div>
+    <div id="fpw-success" class="alert alert-success" style="margin-bottom:12px"></div>
+
+    <!-- Step 1: request code -->
+    <div id="fpw-step1">
+      <div class="form-group">
+        <label>Username / Email</label>
+        <input type="text" id="fpw-email" placeholder="you@dphe.gov.bd">
+      </div>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn" onclick="closeForgotPasswordModal()">বাতিল</button>
+        <button class="btn btn-primary" id="fpw-send-btn" onclick="requestPasswordResetCode()">📧 কোড পাঠান — Send Code</button>
+      </div>
+    </div>
+
+    <!-- Step 2: enter code + new password -->
+    <div id="fpw-step2" style="display:none">
+      <div style="font-size:12px;color:#555;margin-bottom:10px" id="fpw-step2-info"></div>
+      <div class="form-group">
+        <label>ইমেইলে পাঠানো ৬-সংখ্যার কোড — 6-digit code</label>
+        <input type="text" id="fpw-code" maxlength="6" placeholder="123456">
+      </div>
+      <div class="form-group">
+        <label>নতুন পাসওয়ার্ড — New Password</label>
+        <input type="password" id="fpw-new-pass" placeholder="কমপক্ষে ৬ অক্ষর">
+      </div>
+      <div class="form-group">
+        <label>নতুন পাসওয়ার্ড আবার লিখুন — Confirm Password</label>
+        <input type="password" id="fpw-new-pass2" placeholder="আবার লিখুন">
+      </div>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn" onclick="closeForgotPasswordModal()">বাতিল</button>
+        <button class="btn btn-primary" onclick="confirmPasswordResetCode()">✅ পাসওয়ার্ড পরিবর্তন করুন</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- MAIN APP -->
@@ -723,7 +770,7 @@ tr:hover td{background:#f8fdf8}
           <th style="min-width:160px">Last Visit</th>
           <th style="min-width:80px">Total Visits</th>
           <th style="min-width:130px">Visit History</th>
-          <th style="min-width:120px">New Report</th>
+          <th style="min-width:120px">New Visit</th>
         </tr>
       </thead>
       <tbody id="mon-tbody"></tbody>
@@ -945,12 +992,12 @@ tr:hover td{background:#f8fdf8}
     <div class="page-header" style="margin-bottom:0">
       <div class="page-title">👥 User Management <span style="font-weight:400;color:#2d8a42">| ব্যবহারকারী ব্যবস্থাপনা</span></div>
     </div>
-    <button class="btn btn-primary btn-sm" onclick="showAddUserForm()">➕ নতুন ব্যবহারকারী যোগ করুন</button>
+    <button class="btn btn-primary btn-sm" onclick="showAddUserForm()">➕ Add New User</button>
   </div>
 
   <!-- Add User Form -->
   <div id="add-user-form" class="card" style="display:none">
-    <div class="card-title"><span>➕</span> <span id="user-form-title">নতুন ব্যবহারকারী যোগ করুন</span></div>
+    <div class="card-title"><span>➕</span> <span id="user-form-title">Add New User</span></div>
     <input type="hidden" id="u-edit-idx" value="-1">
     <div class="form-grid">
       <div class="fg"><label>পূর্ণ নাম *</label><input type="text" id="u-name" placeholder="কর্মকর্তার পূর্ণ নাম"></div>
@@ -1050,20 +1097,20 @@ tr:hover td{background:#f8fdf8}
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn" onclick="closeUserForm()">বাতিল করুন</button>
-      <button class="btn btn-primary" id="user-form-save-btn" onclick="addUser()">💾 ব্যবহারকারী সংরক্ষণ করুন</button>
+      <button class="btn" onclick="closeUserForm()">Cancel</button>
+      <button class="btn btn-primary" id="user-form-save-btn" onclick="addUser()">💾 Save User</button>
     </div>
   </div>
 
   <!-- User List Table -->
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:0"><span>👥</span> সকল ব্যবহারকারীর তালিকা</div>
-      <input type="text" placeholder="🔍 নাম / ইমেইল খুঁজুন..." oninput="filterUsers(this.value)" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;width:200px;outline:none">
+      <div class="card-title" style="margin-bottom:0"><span>👥</span> All Users List</div>
+      <input type="text" placeholder="🔍 Search name / email..." oninput="filterUsers(this.value)" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;width:200px;outline:none">
     </div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>#</th><th>নাম</th><th>ইউজারনেম</th><th>ভূমিকা</th><th>অফিস</th><th>শেষ লগইন</th><th>স্ট্যাটাস</th><th style="min-width:300px">অ্যাকশন</th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Username</th><th>Role</th><th>Office</th><th>Last Login</th><th>Status</th><th style="min-width:300px">Actions</th></tr></thead>
       <tbody id="users-tbody"></tbody>
     </table>
     </div>
@@ -1126,6 +1173,17 @@ tr:hover td{background:#f8fdf8}
       <div class="fg full">
         <label>পরিদর্শনকারী কর্মকর্তা — Visiting Officer</label>
         <input type="text" id="mon-officer" placeholder="কর্মকর্তার নাম লিখুন">
+      </div>
+      <div class="fg full">
+        <label>📷 এই পরিদর্শনের ছবি — Visit Photo (ঐচ্ছিক)</label>
+        <input type="file" id="mon-photo-gallery-input" accept="image/*" style="display:none" onchange="handleMonVisitPhoto(this.files)">
+        <input type="file" id="mon-photo-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleMonVisitPhoto(this.files)">
+        <div class="upload-actions" style="justify-content:flex-start">
+          <button type="button" class="btn btn-sm" onclick="document.getElementById('mon-photo-gallery-input').click()">📁 Choose from Gallery</button>
+          <button type="button" class="btn btn-sm" style="border-color:#1976d2;color:#1976d2;background:#e3f2fd" onclick="document.getElementById('mon-photo-camera-input').click()">📷 Use Camera</button>
+          <button type="button" id="mon-photo-remove-btn" class="btn btn-sm" style="display:none;border-color:#c62828;color:#c62828;background:#ffebee" onclick="clearMonVisitPhoto()">🗑 Remove</button>
+        </div>
+        <div id="mon-photo-preview" style="margin-top:8px"></div>
       </div>
     </div>
     <div class="btn-row">
@@ -2188,11 +2246,15 @@ function buildMonRow(r) {
   var visits = r.monitoring || [];
   var lastVisit = getLastVisit(r);
 
-  // Photo cell
-  var photoCell = '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">' +
-    '<button class="mon-photo-btn" onclick="triggerMonPhoto(\'' + r.id + '\')">Browse...</button>' +
-    '<span style="font-size:10px;color:#aaa" id="mpn-' + r.id + '">No ...ed.</span>' +
-    '</div>';
+  // Photo cell — one-time "initial planting photo" catch-up (locked once set, from either
+  // Add Record or this catch-up uploader).
+  var hasInitialPhoto = r.photos && r.photos.length > 0;
+  var photoCell = hasInitialPhoto
+    ? '<div style="font-size:10px;color:#2d8a42;font-weight:700;text-align:center">✅ Initial photo<br>saved 🔒</div>'
+    : '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">' +
+        '<button class="mon-photo-btn" onclick="triggerMonPhoto(\'' + r.id + '\')">📸 Add Initial Photo</button>' +
+        '<span style="font-size:10px;color:#aaa" id="mpn-' + r.id + '">Missed at planting</span>' +
+      '</div>';
 
   // Current status pill
   var statusColor = dead ? '#c62828' : (r.status==='Care Required'?'#f57c00':(r.status==='Pending Check'?'#888':'#2d8a42'));
@@ -2221,7 +2283,7 @@ function buildMonRow(r) {
   // New report button or locked
   var reportCell = dead
     ? '<div style="display:flex;align-items:center;gap:6px;color:#c62828;font-size:11px;font-weight:600"><span style="font-size:16px">🔒</span> Tree Dead</div>'
-    : '<button onclick="openMonModal(\'' + r.id + '\')" style="padding:6px 14px;border-radius:7px;border:none;background:#2d8a42;color:#fff;font-size:12px;font-weight:700;cursor:pointer">➕ New Report</button>';
+    : '<button onclick="openMonModal(\'' + r.id + '\')" style="padding:6px 14px;border-radius:7px;border:none;background:#2d8a42;color:#fff;font-size:12px;font-weight:700;cursor:pointer">➕ New Visit</button>';
 
   // GPS badge
   var gpsBadge = (r.lat && r.lon)
@@ -2280,6 +2342,7 @@ function showVisitHistory(rid) {
           (v.notes ? '<div style="font-size:11px;color:#333">' + v.notes + '</div>' : '') +
           (v.careDetail ? '<div style="font-size:11px;color:#e65100;margin-top:3px">🔧 ' + v.careDetail + '</div>' : '') +
           (v.replacement && v.replacement!=='no' ? '<div style="font-size:11px;color:#1565c0;margin-top:3px">🔄 Replacement: ' + v.replacement + '</div>' : '') +
+          (v.photo ? '<img src="'+v.photo+'" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid #fff;margin-top:6px;box-shadow:0 1px 4px rgba(0,0,0,0.15)">' : '') +
         '</div>';
       }).join('');
   document.getElementById('visit-history-body').innerHTML = html;
@@ -2295,16 +2358,109 @@ function showVisitHistory(rid) {
 
 
 function triggerMonPhoto(rid) {
+  var r = records.find(function(x){ return x.id === rid; });
+  if (!r) return;
+  if (r.photos && r.photos.length > 0) { alert('✅ এই গাছের প্রাথমিক (রোপণকালীন) ছবি ইতিমধ্যে সংরক্ষিত আছে। এটি পরিবর্তন করা যাবে না।'); return; }
+
   var inp = document.createElement('input');
-  inp.type='file'; inp.accept='image/*';
+  inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = function() {
-    if (inp.files && inp.files[0]) {
-      var f=inp.files[0];
-      var el=document.getElementById('mpn-'+rid);
-      if(el) el.textContent = f.name.substring(0,8)+'…';
+    if (!inp.files || !inp.files[0]) return;
+    var file = inp.files[0];
+    var el = document.getElementById('mpn-' + rid);
+    if (el) el.textContent = '⏳ Uploading…';
+
+    var finish = function(dataUrl) {
+      if (!backendConfigured()) {
+        r.photos = [dataUrl];
+        renderMonitoring();
+        return;
+      }
+      var commaIdx = dataUrl.indexOf(',');
+      var mime = (dataUrl.substring(5, dataUrl.indexOf(';')) || 'image/jpeg');
+      var base64 = dataUrl.substring(commaIdx + 1);
+      var uniqueName = rid + '_initial_' + Date.now();
+      apiCall('uploadImage', { filename: uniqueName, mime: mime, data: base64 }).then(function(res) {
+        if (res && res.ok && res.url) {
+          r.photos = [res.url];
+          renderMonitoring();
+          apiCall('updateRecord', { record: r }).then(function(res2) {
+            showSyncStatus(res2 && res2.ok ? '☁️ Initial photo saved' : '⚠️ Sync failed', !!(res2 && res2.ok));
+          });
+        } else {
+          alert('⚠️ ছবি আপলোড ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+          renderMonitoring();
+        }
+      });
+    };
+
+    if (file.size <= 102400) {
+      readAsDataURL(file, finish);
+    } else {
+      resizeImage(file, 100 * 1024, function(blob) { readAsDataURL(blob, finish); });
     }
   };
   inp.click();
+}
+
+// ── Per-visit photo (Monitoring "New Visit" modal) — camera/gallery, one photo per visit ──
+var currentMonVisitPhoto = null;   // { url } currently staged for the open modal
+var monVisitOldPhotoUrl  = null;   // photo that was on the visit before this edit session (for Drive cleanup)
+
+function driveFileIdFromUrl(url) {
+  if (!url) return null;
+  var m = String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+function resetMonVisitPhotoUI() {
+  currentMonVisitPhoto = null;
+  monVisitOldPhotoUrl = null;
+  ['mon-photo-gallery-input','mon-photo-camera-input'].forEach(function(id){ var el=document.getElementById(id); if (el) el.value=''; });
+  renderMonVisitPhotoPreview(null, false);
+}
+
+function renderMonVisitPhotoPreview(url, uploading) {
+  var prev = document.getElementById('mon-photo-preview');
+  var rb = document.getElementById('mon-photo-remove-btn');
+  if (!prev) return;
+  if (uploading) { prev.innerHTML = '<div style="font-size:11px;color:#888">⏳ Uploading photo…</div>'; if (rb) rb.style.display='none'; return; }
+  if (!url) { prev.innerHTML=''; if (rb) rb.style.display='none'; return; }
+  prev.innerHTML = '<img src="'+url+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #c8e6c9">';
+  if (rb) rb.style.display = 'inline-block';
+}
+
+function handleMonVisitPhoto(files) {
+  if (!files || !files[0]) return;
+  var file = files[0];
+  var finish = function(dataUrl) {
+    if (!backendConfigured()) {
+      currentMonVisitPhoto = { url: dataUrl };
+      renderMonVisitPhotoPreview(dataUrl, false);
+      return;
+    }
+    renderMonVisitPhotoPreview(null, true);
+    var commaIdx = dataUrl.indexOf(',');
+    var mime = (dataUrl.substring(5, dataUrl.indexOf(';')) || 'image/jpeg');
+    var base64 = dataUrl.substring(commaIdx + 1);
+    var uniqueName = (currentMonRecordId || 'visit') + '_visit_' + Date.now();
+    apiCall('uploadImage', { filename: uniqueName, mime: mime, data: base64 }).then(function(res) {
+      if (res && res.ok && res.url) {
+        currentMonVisitPhoto = { url: res.url };
+        renderMonVisitPhotoPreview(res.url, false);
+      } else {
+        alert('⚠️ ছবি আপলোড ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+        renderMonVisitPhotoPreview(currentMonVisitPhoto ? currentMonVisitPhoto.url : null, false);
+      }
+    });
+  };
+  if (file.size <= 102400) { readAsDataURL(file, finish); }
+  else { resizeImage(file, 100 * 1024, function(blob){ readAsDataURL(blob, finish); }); }
+}
+
+function clearMonVisitPhoto() {
+  currentMonVisitPhoto = null;
+  renderMonVisitPhotoPreview(null, false);
 }
 
 function fetchMonGPS() {
@@ -2495,6 +2651,7 @@ function openMonModal(recordId) {
   document.getElementById('mon-officer').value = r.officer || '';
   document.getElementById('mon-tree-status').value = r.status === 'Dead' ? 'Alive' : (r.status || 'Alive');
   toggleMonitoringFields();
+  resetMonVisitPhotoUI();
   document.getElementById('mon-modal').style.display = 'block';
 }
 
@@ -2521,6 +2678,12 @@ function openMonModalEdit(recordId, visitIdx) {
   document.getElementById('mon-tree-status').value = v.status || 'Alive';
   document.getElementById('mon-replacement').value = v.replacement || 'no';
   toggleMonitoringFields();
+  resetMonVisitPhotoUI();
+  if (v.photo) {
+    currentMonVisitPhoto = { url: v.photo };
+    monVisitOldPhotoUrl = v.photo;
+    renderMonVisitPhotoPreview(v.photo, false);
+  }
   document.getElementById('mon-modal').style.display = 'block';
 }
 
@@ -2562,6 +2725,7 @@ function deleteMonVisit(recordId, visitIdx) {
 function closeMonModal() {
   document.getElementById('mon-modal').style.display = 'none';
   currentMonRecordId = null;
+  resetMonVisitPhotoUI();
 }
 
 function saveMonitoringVisit() {
@@ -2630,7 +2794,15 @@ function saveMonitoringVisit() {
     officer: officer,
     careDetail: document.getElementById('mon-care-detail').value,
     replacement: document.getElementById('mon-replacement').value,
+    photo: currentMonVisitPhoto ? currentMonVisitPhoto.url : null,
   };
+
+  // If this visit's photo was replaced or removed, delete the old Drive file
+  // (keeps Drive storage usage low — old copies aren't kept once superseded).
+  if (backendConfigured() && monVisitOldPhotoUrl && monVisitOldPhotoUrl !== entry.photo) {
+    var oldFileId = driveFileIdFromUrl(monVisitOldPhotoUrl);
+    if (oldFileId) apiCall('deleteImage', { fileId: oldFileId });
+  }
 
   if (isEditing) {
     r.monitoring[currentMonEditIndex] = entry;
@@ -2719,7 +2891,13 @@ function centerMapBangladesh() {
 
 function updateMapCards() {
   var filter = document.getElementById('map-filter')?.value;
-  var data = filter && filter !== 'all' ? divData.filter(d => d.name === filter) : divData;
+  // Real counts from actual data (respecting the logged-in user's scope), not the static divData numbers.
+  var scoped = (typeof scopedRecords === 'function') ? scopedRecords() : records;
+  var counts = {};
+  divData.forEach(function(d){ counts[d.name] = 0; });
+  scoped.forEach(function(r){ if (counts[r.div] !== undefined) counts[r.div]++; });
+  var data = divData.map(function(d){ return { name: d.name, color: d.color, count: counts[d.name] || 0 }; });
+  if (filter && filter !== 'all') data = data.filter(function(d){ return d.name === filter; });
   document.getElementById('map-summary-cards').innerHTML = data.map(d =>
     '<div style="background:#fff;border-radius:10px;padding:12px;text-align:center;border-top:3px solid '+d.color+';box-shadow:0 1px 4px rgba(0,0,0,0.08)">' +
     '<div style="font-size:11px;color:#888;margin-bottom:4px">'+d.name+'</div>' +
@@ -3338,9 +3516,9 @@ function showAddUserForm() {
 function resetUserForm() {
   document.getElementById('u-edit-idx').value = '-1';
   var titleEl = document.getElementById('user-form-title');
-  if (titleEl) titleEl.textContent = 'নতুন ব্যবহারকারী যোগ করুন';
+  if (titleEl) titleEl.textContent = 'Add New User';
   var saveBtn = document.getElementById('user-form-save-btn');
-  if (saveBtn) saveBtn.innerHTML = '💾 ব্যবহারকারী সংরক্ষণ করুন';
+  if (saveBtn) saveBtn.innerHTML = '💾 Save User';
   ['u-name','u-email','u-office','u-pass','u-phone'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   var passEl = document.getElementById('u-pass');
   if (passEl) passEl.placeholder = 'প্রাথমিক পাসওয়ার্ড';
@@ -4467,6 +4645,62 @@ function logout() {
 }
 
 document.addEventListener('DOMContentLoaded', showLoginBackendWarning);
+
+// ── Forgot Password (self-service reset via emailed code) ──────────────
+function openForgotPasswordModal() {
+  document.getElementById('fpw-email').value = document.getElementById('login-user').value.trim();
+  document.getElementById('fpw-code').value = '';
+  document.getElementById('fpw-new-pass').value = '';
+  document.getElementById('fpw-new-pass2').value = '';
+  document.getElementById('fpw-step1').style.display = 'block';
+  document.getElementById('fpw-step2').style.display = 'none';
+  hideEl('fpw-alert'); hideEl('fpw-success');
+  document.getElementById('forgot-pw-modal').style.display = 'block';
+}
+function closeForgotPasswordModal() {
+  document.getElementById('forgot-pw-modal').style.display = 'none';
+}
+function hideEl(id) { var el = document.getElementById(id); if (el) el.classList.remove('show'); }
+function showFpwAlert(msg) { var el = document.getElementById('fpw-alert'); el.textContent = msg; el.classList.add('show'); }
+function showFpwSuccess(msg) { var el = document.getElementById('fpw-success'); el.textContent = msg; el.classList.add('show'); }
+
+function requestPasswordResetCode() {
+  hideEl('fpw-alert'); hideEl('fpw-success');
+  var email = document.getElementById('fpw-email').value.trim();
+  if (!email) { showFpwAlert('অনুগ্রহ করে ইমেইল দিন।'); return; }
+  if (!backendConfigured()) { showFpwAlert('Backend সংযুক্ত নয় — এই ফিচারের জন্য Apps Script backend প্রয়োজন।'); return; }
+
+  var btn = document.getElementById('fpw-send-btn');
+  btn.disabled = true; btn.textContent = '⏳ পাঠানো হচ্ছে…';
+  apiCall('requestPasswordReset', { email: email }).then(function(res) {
+    btn.disabled = false; btn.textContent = '📧 কোড পাঠান — Send Code';
+    if (!res || !res.ok) { showFpwAlert('❌ ' + (res && res.error || 'কোড পাঠানো যায়নি।')); return; }
+    document.getElementById('fpw-step2-info').textContent = email + ' — এই ইমেইলে একটি ৬-সংখ্যার কোড পাঠানো হয়েছে (১০ মিনিট মেয়াদ)।';
+    document.getElementById('fpw-step1').style.display = 'none';
+    document.getElementById('fpw-step2').style.display = 'block';
+  });
+}
+
+function confirmPasswordResetCode() {
+  hideEl('fpw-alert');
+  var email = document.getElementById('fpw-email').value.trim();
+  var code = document.getElementById('fpw-code').value.trim();
+  var p1 = document.getElementById('fpw-new-pass').value;
+  var p2 = document.getElementById('fpw-new-pass2').value;
+  if (!code || !p1 || !p2) { showFpwAlert('সব ফিল্ড পূরণ করুন।'); return; }
+  if (p1 !== p2) { showFpwAlert('পাসওয়ার্ড দুটি মিলছে না।'); return; }
+  if (p1.length < 6) { showFpwAlert('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।'); return; }
+
+  apiCall('confirmPasswordReset', { email: email, code: code, newPassword: p1 }).then(function(res) {
+    if (!res || !res.ok) { showFpwAlert('❌ ' + (res && res.error || 'পাসওয়ার্ড পরিবর্তন ব্যর্থ হয়েছে।')); return; }
+    showFpwSuccess('✅ পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে। এখন নতুন পাসওয়ার্ড দিয়ে লগইন করুন।');
+    setTimeout(function() {
+      closeForgotPasswordModal();
+      document.getElementById('login-user').value = email;
+      onLoginEmailChange();
+    }, 1800);
+  });
+}
 
 // ── Planting Level dropdown: options depend on the logged-in role ──
 // hq       = HQ/Admin office planted directly (no circle/district/upazila)
