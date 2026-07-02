@@ -217,6 +217,7 @@ tr:hover td{background:#f8fdf8}
 /* ── USER TABLE ── */
 .user-role{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
 
+
 /* ── RBAC SCOPE BANNER ── */
 .scope-banner{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;margin-bottom:18px;font-size:13px;font-weight:600;border:1.5px solid}
 .scope-admin{background:#fff8e1;color:#e65100;border-color:#ffcc02}
@@ -299,6 +300,7 @@ tr:hover td{background:#f8fdf8}
 .mon-visit-care{border-color:#1976d2;color:#1976d2;background:#e3f2fd}
 .mon-visit-care:hover{background:#1976d2;color:#fff}
 
+
 /* ── MONITORING TABLE (new design) ── */
 .mon-table-wrap{overflow-x:auto;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
 .mon-table{width:100%;border-collapse:collapse;font-size:12px;min-width:1000px}
@@ -362,7 +364,7 @@ tr:hover td{background:#f8fdf8}
     <label>Username / Email</label>
     <input type="text" id="login-user" placeholder="you@dphe.gov.bd" autocomplete="username" oninput="onLoginEmailChange()">
   </div>
-  <div class="form-group" id="login-pass-wrap" style="display:none">
+  <div class="form-group" id="login-pass-wrap">
     <label>Password</label>
     <input type="password" id="login-pass" placeholder="Enter password" autocomplete="current-password">
   </div>
@@ -864,13 +866,13 @@ tr:hover td{background:#f8fdf8}
 <div class="page" id="page-species">
   <div class="section-header">
     <div class="page-header" style="margin-bottom:0">
-      <div class="page-title">🌿 Plant Species <span style="font-weight:400;color:#2d8a42">| উদ্ভিদ প্রজাতি তালিকা</span></div>
+      <div class="page-title">🌿 Plant Species</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="downloadSpeciesTemplate()" style="border-color:#1976d2;color:#1565c0;background:#e3f2fd">⬇️ CSV Template</button>
       <button class="btn btn-sm" onclick="document.getElementById('bulk-csv-input').click()" style="border-color:#f57c00;color:#e65100;background:#fff8e1">📤 Bulk Upload CSV</button>
       <input type="file" id="bulk-csv-input" accept=".csv" style="display:none" onchange="bulkUploadSpecies(this)">
-      <button class="btn btn-sm btn-primary" onclick="showAddSpeciesForm()">➕ নতুন প্রজাতি যোগ করুন</button>
+      <button class="btn btn-sm btn-primary" onclick="showAddSpeciesForm()">➕ Add New Species</button>
     </div>
   </div>
 
@@ -878,68 +880,68 @@ tr:hover td{background:#f8fdf8}
 
   <!-- Add Species Form -->
   <div id="add-species-form" class="card" style="display:none">
-    <div class="card-title"><span>➕</span> Add New Species <span style="font-weight:400;color:#2d8a42">| নতুন প্রজাতি যোগ করুন</span></div>
+    <div class="card-title"><span>➕</span> Add New Species</div>
     <div class="form-grid">
-      <div class="fg"><label>English Name * (ইংরেজি নাম)</label><input type="text" id="sp-en" placeholder="e.g. Mango"></div>
-      <div class="fg"><label>Bengali Name * (বাংলা নাম)</label><input type="text" id="sp-bn" placeholder="e.g. আম"></div>
-      <div class="fg"><label>Scientific Name (বৈজ্ঞানিক নাম)</label><input type="text" id="sp-sci" placeholder="e.g. Mangifera indica"></div>
+      <div class="fg"><label>English Name *</label><input type="text" id="sp-en" placeholder="e.g. Mango"></div>
+      <div class="fg"><label>Bengali Name *</label><input type="text" id="sp-bn" placeholder="e.g. আম"></div>
+      <div class="fg"><label>Scientific Name</label><input type="text" id="sp-sci" placeholder="e.g. Mangifera indica"></div>
       <div class="fg">
-        <label>Category (বিভাগ)</label>
+        <label>Category</label>
         <select id="sp-cat">
-          <option value="Fruit tree — ফলজ">Fruit tree — ফলজ</option>
-          <option value="Timber tree — বনজ">Timber tree — বনজ</option>
-          <option value="Medicinal — ওষুধি">Medicinal — ওষুধি</option>
-          <option value="Ornamental — সৌন্দর্যবর্ধনকারী">Ornamental — সৌন্দর্যবর্ধনকারী</option>
-          <option value="Others — অন্যান্য">Others — অন্যান্য</option>
+          <option value="Fruit tree">Fruit tree</option>
+          <option value="Timber tree">Timber tree</option>
+          <option value="Medicinal">Medicinal</option>
+          <option value="Ornamental">Ornamental</option>
+          <option value="Others">Others</option>
         </select>
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn" onclick="showAddSpeciesForm()">বাতিল করুন</button>
-      <button class="btn btn-primary" onclick="addSpeciesEntry()">✅ প্রজাতি সংরক্ষণ করুন</button>
+      <button class="btn" onclick="showAddSpeciesForm()">Cancel</button>
+      <button class="btn btn-primary" onclick="addSpeciesEntry()">✅ Save Species</button>
     </div>
   </div>
 
   <!-- Bulk Upload Instructions -->
   <div class="card" style="background:#fffde7;border:1px solid #ffe082">
-    <div class="card-title" style="color:#f57f17"><span>📋</span> CSV Bulk Upload — নির্দেশনা</div>
+    <div class="card-title" style="color:#f57f17"><span>📋</span> CSV Bulk Upload — Instructions</div>
     <div style="font-size:12px;color:#6d4c00;line-height:1.8">
-      <b>CSV ফরম্যাট:</b> English Name, Bengali Name, Scientific Name, Category<br>
-      <b>উদাহরণ:</b> Mango, আম, Mangifera indica, Fruit tree — ফলজ<br>
-      ⚠️ প্রথম সারি (Header) স্বয়ংক্রিয়ভাবে বাদ দেওয়া হবে। একই নাম থাকলে Duplicate skip করা হবে।<br>
-      💡 প্রথমে "<b>CSV Template</b>" ডাউনলোড করুন, তারপর পূরণ করে Upload করুন — অথবা নিচে সরাসরি পেস্ট করুন।
+      <b>CSV Format:</b> English Name, Bengali Name, Scientific Name, Category<br>
+      <b>Example:</b> Mango, আম, Mangifera indica, Fruit tree<br>
+      ⚠️ The first row (header) is skipped automatically. Duplicate names are skipped.<br>
+      💡 Download the "<b>CSV Template</b>" first, fill it in and upload it — or paste rows directly below.
     </div>
   </div>
 
   <!-- Bulk Paste Box (textarea) -->
   <div class="card">
-    <div class="card-title"><span>📝</span> Paste Bulk Data <span style="font-weight:400;color:#2d8a42">| একসাথে একাধিক প্রজাতি পেস্ট করুন</span></div>
+    <div class="card-title"><span>📝</span> Paste Bulk Data</div>
     <div class="fg">
-      <label>CSV রো পেস্ট করুন (English, Bengali, Scientific, Category) — এক লাইনে একটি প্রজাতি</label>
-      <textarea id="bulk-paste-area" rows="6" placeholder="Mango, আম, Mangifera indica, Fruit tree — ফলজ&#10;Neem, নিম, Azadirachta indica, Medicinal — ওষুধি" style="width:100%;font-family:monospace;font-size:12px;padding:10px;border:1px solid #ddd;border-radius:8px"></textarea>
+      <label>Paste CSV rows (English, Bengali, Scientific, Category) — one species per line</label>
+      <textarea id="bulk-paste-area" rows="6" placeholder="Mango, আম, Mangifera indica, Fruit tree&#10;Neem, নিম, Azadirachta indica, Medicinal" style="width:100%;font-family:monospace;font-size:12px;padding:10px;border:1px solid #ddd;border-radius:8px"></textarea>
     </div>
     <div class="btn-row" style="margin-top:10px">
-      <button class="btn" onclick="document.getElementById('bulk-paste-area').value=''">বাতিল করুন</button>
-      <button class="btn btn-primary" id="bulk-submit-btn" onclick="submitBulkSpecies()">📤 Submit Bulk Upload — জমা দিন</button>
+      <button class="btn" onclick="document.getElementById('bulk-paste-area').value=''">Clear</button>
+      <button class="btn btn-primary" id="bulk-submit-btn" onclick="submitBulkSpecies()">📤 Submit Bulk Upload</button>
     </div>
   </div>
 
   <!-- Species Table -->
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:0"><span>🌿</span> সকল প্রজাতির তালিকা</div>
+      <div class="card-title" style="margin-bottom:0"><span>🌿</span> All Species List</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="species-search" placeholder="🔍 প্রজাতি খুঁজুন..." oninput="filterSpeciesTable()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;width:180px">
+        <input type="text" id="species-search" placeholder="🔍 Search species..." oninput="filterSpeciesTable()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;width:180px">
         <span id="species-count" style="font-size:12px;color:#888"></span>
       </div>
     </div>
     <div style="overflow-x:auto">
-      <table>
+      <table class="mon-table">
         <thead>
           <tr>
             <th>#</th>
             <th>English Name</th>
-            <th>বাংলা নাম</th>
+            <th>Bengali Name</th>
             <th>Scientific Name</th>
             <th>Category</th>
             <th>Action</th>
@@ -954,23 +956,23 @@ tr:hover td{background:#f8fdf8}
 <!-- ─── REPORTS ─── -->
 <div class="page" id="page-reports">
   <div class="page-header">
-    <div class="page-title">📈 Reports <span style="font-weight:400;color:#2d8a42">| প্রতিবেদন</span></div>
+    <div class="page-title">📈 Reports</div>
   </div>
 
   <div class="rep-panel">
-    <div class="card-title"><span>⚙️</span> Report Builder <span style="font-weight:400;color:#2d8a42">| প্রতিবেদন তৈরি করুন</span></div>
+    <div class="card-title"><span>⚙️</span> Report Builder</div>
     <div class="form-grid">
       <div class="fg">
-        <label>Report Type | প্রতিবেদনের ধরন</label>
+        <label>Report Type</label>
         <select id="rep-type">
-          <option value="summary">Summary Report | সারসংক্ষেপ</option>
-          <option value="detailed">Detailed Record Report | বিস্তারিত তালিকা</option>
-          <option value="office">Office Register Report | দপ্তরভিত্তিক নিবন্ধন</option>
-          <option value="trend">Monthly Trend Report | মাসিক প্রবণতা</option>
+          <option value="summary">Summary Report</option>
+          <option value="detailed">Detailed Record Report</option>
+          <option value="office">Office Register Report</option>
+          <option value="trend">Monthly Trend Report</option>
         </select>
       </div>
-      <div class="fg"><label>From Date | শুরুর তারিখ</label><input type="date" id="rep-from"></div>
-      <div class="fg"><label>To Date | শেষের তারিখ</label><input type="date" id="rep-to"></div>
+      <div class="fg"><label>From Date</label><input type="date" id="rep-from"></div>
+      <div class="fg"><label>To Date</label><input type="date" id="rep-to"></div>
     </div>
     <div id="rep-scope-controls" class="form-grid" style="margin-top:2px"></div>
     <div id="rep-scope-summary" class="rep-scope-box"></div>
@@ -1304,36 +1306,36 @@ function loadAllFromSheets() {
 
 // Standard tree species list (avoids spelling variations)
 var TREE_LIST = [
-  {en:'Mango',bn:'আম',sci:'Mangifera indica',cat:'Fruit tree — ফলজ'},
-  {en:'Jackfruit',bn:'কাঁঠাল',sci:'Artocarpus heterophyllus',cat:'Fruit tree — ফলজ'},
-  {en:'Guava',bn:'পেয়ারা',sci:'Psidium guajava',cat:'Fruit tree — ফলজ'},
-  {en:'Banana',bn:'কলা',sci:'Musa spp.',cat:'Fruit tree — ফলজ'},
-  {en:'Papaya',bn:'পেঁপে',sci:'Carica papaya',cat:'Fruit tree — ফলজ'},
-  {en:'Coconut',bn:'নারিকেল',sci:'Cocos nucifera',cat:'Fruit tree — ফলজ'},
-  {en:'Litchi',bn:'লিচু',sci:'Litchi chinensis',cat:'Fruit tree — ফলজ'},
-  {en:'Blackberry (Jaam)',bn:'জাম',sci:'Syzygium cumini',cat:'Fruit tree — ফলজ'},
-  {en:'Pomelo (Jambura)',bn:'জাম্বুরা',sci:'Citrus maxima',cat:'Fruit tree — ফলজ'},
-  {en:'Star fruit (Carambola)',bn:'কামরাঙ্গা',sci:'Averrhoa carambola',cat:'Fruit tree — ফলজ'},
-  {en:'Teak',bn:'সেগুন',sci:'Tectona grandis',cat:'Timber tree — বনজ'},
-  {en:'Mahogany',bn:'মেহগনি',sci:'Swietenia mahagoni',cat:'Timber tree — বনজ'},
-  {en:'Bamboo',bn:'বাঁশ',sci:'Bambusa spp.',cat:'Timber tree — বনজ'},
-  {en:'Eucalyptus',bn:'ইউক্যালিপটাস',sci:'Eucalyptus spp.',cat:'Timber tree — বনজ'},
-  {en:'Acacia',bn:'আকাশমণি',sci:'Acacia auriculiformis',cat:'Timber tree — বনজ'},
-  {en:'Rain tree',bn:'রেইনট্রি',sci:'Samanea saman',cat:'Timber tree — বনজ'},
-  {en:'Neem',bn:'নিম',sci:'Azadirachta indica',cat:'Medicinal — ওষুধি'},
-  {en:'Arjun',bn:'অর্জুন',sci:'Terminalia arjuna',cat:'Medicinal — ওষুধি'},
-  {en:'Bahera',bn:'বহেরা',sci:'Terminalia bellirica',cat:'Medicinal — ওষুধি'},
-  {en:'Haritaki',bn:'হরিতকী',sci:'Terminalia chebula',cat:'Medicinal — ওষুধি'},
-  {en:'Tulsi',bn:'তুলসী',sci:'Ocimum sanctum',cat:'Medicinal — ওষুধি'},
-  {en:'Krishnachura',bn:'কৃষ্ণচূড়া',sci:'Delonix regia',cat:'Ornamental — সৌন্দর্যবর্ধনকারী'},
-  {en:'Sonalu',bn:'সোনালু',sci:'Cassia fistula',cat:'Ornamental — সৌন্দর্যবর্ধনকারী'},
-  {en:'Shimul',bn:'শিমুল',sci:'Bombax ceiba',cat:'Ornamental — সৌন্দর্যবর্ধনকারী'},
-  {en:'Bakul',bn:'বকুল',sci:'Mimusops elengi',cat:'Ornamental — সৌন্দর্যবর্ধনকারী'},
-  {en:'Mangrove (Sundari)',bn:'সুন্দরী',sci:'Heritiera fomes',cat:'Others — অন্যান্য'},
-  {en:'Date Palm',bn:'খেজুর',sci:'Phoenix sylvestris',cat:'Fruit tree — ফলজ'},
-  {en:'Tamarind',bn:'তেঁতুল',sci:'Tamarindus indica',cat:'Fruit tree — ফলজ'},
-  {en:'Moringa (Sajne)',bn:'সজনে',sci:'Moringa oleifera',cat:'Medicinal — ওষুধি'},
-  {en:'Drumstick',bn:'শজনে',sci:'Moringa oleifera',cat:'Medicinal — ওষুধি'},
+  {en:'Mango',bn:'আম',sci:'Mangifera indica',cat:'Fruit tree'},
+  {en:'Jackfruit',bn:'কাঁঠাল',sci:'Artocarpus heterophyllus',cat:'Fruit tree'},
+  {en:'Guava',bn:'পেয়ারা',sci:'Psidium guajava',cat:'Fruit tree'},
+  {en:'Banana',bn:'কলা',sci:'Musa spp.',cat:'Fruit tree'},
+  {en:'Papaya',bn:'পেঁপে',sci:'Carica papaya',cat:'Fruit tree'},
+  {en:'Coconut',bn:'নারিকেল',sci:'Cocos nucifera',cat:'Fruit tree'},
+  {en:'Litchi',bn:'লিচু',sci:'Litchi chinensis',cat:'Fruit tree'},
+  {en:'Blackberry (Jaam)',bn:'জাম',sci:'Syzygium cumini',cat:'Fruit tree'},
+  {en:'Pomelo (Jambura)',bn:'জাম্বুরা',sci:'Citrus maxima',cat:'Fruit tree'},
+  {en:'Star fruit (Carambola)',bn:'কামরাঙ্গা',sci:'Averrhoa carambola',cat:'Fruit tree'},
+  {en:'Teak',bn:'সেগুন',sci:'Tectona grandis',cat:'Timber tree'},
+  {en:'Mahogany',bn:'মেহগনি',sci:'Swietenia mahagoni',cat:'Timber tree'},
+  {en:'Bamboo',bn:'বাঁশ',sci:'Bambusa spp.',cat:'Timber tree'},
+  {en:'Eucalyptus',bn:'ইউক্যালিপটাস',sci:'Eucalyptus spp.',cat:'Timber tree'},
+  {en:'Acacia',bn:'আকাশমণি',sci:'Acacia auriculiformis',cat:'Timber tree'},
+  {en:'Rain tree',bn:'রেইনট্রি',sci:'Samanea saman',cat:'Timber tree'},
+  {en:'Neem',bn:'নিম',sci:'Azadirachta indica',cat:'Medicinal'},
+  {en:'Arjun',bn:'অর্জুন',sci:'Terminalia arjuna',cat:'Medicinal'},
+  {en:'Bahera',bn:'বহেরা',sci:'Terminalia bellirica',cat:'Medicinal'},
+  {en:'Haritaki',bn:'হরিতকী',sci:'Terminalia chebula',cat:'Medicinal'},
+  {en:'Tulsi',bn:'তুলসী',sci:'Ocimum sanctum',cat:'Medicinal'},
+  {en:'Krishnachura',bn:'কৃষ্ণচূড়া',sci:'Delonix regia',cat:'Ornamental'},
+  {en:'Sonalu',bn:'সোনালু',sci:'Cassia fistula',cat:'Ornamental'},
+  {en:'Shimul',bn:'শিমুল',sci:'Bombax ceiba',cat:'Ornamental'},
+  {en:'Bakul',bn:'বকুল',sci:'Mimusops elengi',cat:'Ornamental'},
+  {en:'Mangrove (Sundari)',bn:'সুন্দরী',sci:'Heritiera fomes',cat:'Others'},
+  {en:'Date Palm',bn:'খেজুর',sci:'Phoenix sylvestris',cat:'Fruit tree'},
+  {en:'Tamarind',bn:'তেঁতুল',sci:'Tamarindus indica',cat:'Fruit tree'},
+  {en:'Moringa (Sajne)',bn:'সজনে',sci:'Moringa oleifera',cat:'Medicinal'},
+  {en:'Drumstick',bn:'শজনে',sci:'Moringa oleifera',cat:'Medicinal'},
 ];
 
 var acSelectedIdx = -1;
@@ -1371,6 +1373,7 @@ var records = [
   {id:'TRK-000000015',date:'2025-03-25',div:'Mymensingh Circle',dis:'Jamalpur',upa:'Islampur',site:'Islampur DPHE Office Compound',species:'Sonalu (সোনালু)',cat:'Ornamental',count:0,officer:'—',caregiver:'Kamal Uddin',caregiverPhone:'01711-800001',fund:'Government Revenue',cost:750,status:'Alive',lat:'24.9729',lon:'89.8139',remarks:'Office beautification and shade project.',monitoring:[]},
   {id:'TRK-000000016',date:'2025-05-08',div:'Mymensingh Circle',dis:'Netrokona',upa:'Mohanganj',site:'Mohanganj Canal Side',species:'Date Palm (খেজুর)',cat:'Fruit tree',count:0,officer:'—',caregiver:'Asha Khatun',caregiverPhone:'01711-800002',fund:'Government Revenue',cost:600,status:'Alive',lat:'24.5388',lon:'90.9902',remarks:'Canal bank plantation for erosion control.',monitoring:[{visitNo:1,date:'2025-08-10',status:'Alive',notes:'Healthy growth. Roots stabilising bank.',officer:'—'}]},
 ];
+
 
 var divData = [
   {name:'Barishal Circle',count:14000,color:'#00838f',lat:22.701,lon:90.3535},
@@ -1732,6 +1735,81 @@ var MON_STATUS_LABELS = {
 // only definition used (the app is single-page so load order doesn't matter).
 
 // ════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (el) {
+    document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+  }
+  if (id === 'records') renderRecords();
+  if (id === 'monitoring') renderMonitoring();
+  if (id === 'map') { updateMapCards(); setTimeout(function(){ initLeafletMap(); if(leafletMap) leafletMap.invalidateSize(); }, 100); }
+  if (id === 'species') { renderSpeciesTable(); }
+}
+
+// ════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════
+function initDashboard() {
+  // Count records per division
+  var divCounts = {};
+  divData.forEach(function(d){ divCounts[d.name] = 0; });
+  records.forEach(function(r){ if (divCounts[r.div] !== undefined) divCounts[r.div]++; });
+
+  // Progress bars — based on number of plantation records per division
+  var divWithCounts = divData.map(function(d){ return {name:d.name,color:d.color,count:divCounts[d.name]||0}; });
+  var maxDiv = Math.max(1, Math.max.apply(null, divWithCounts.map(function(d){ return d.count; })));
+  document.getElementById('div-progress-bars').innerHTML = divWithCounts.map(function(d) {
+    return '<div class="progress-row"><div class="pl">' + d.name + '</div>' +
+    '<div class="pb"><div class="pf" style="width:' + Math.round(d.count/maxDiv*100) + '%;background:' + d.color + '"></div></div>' +
+    '<div class="pc">' + d.count + '</div></div>';
+  }).join('');
+
+  // Recent activity
+  var recent = records.slice().reverse().slice(0, 6);
+  document.getElementById('recent-tbody').innerHTML = recent.map(function(r) {
+    var totalPlanted = records.filter(function(x){ return x.species === r.species; }).length;
+    return '<tr><td>' + r.date + '</td><td>' + r.div + '</td><td>' + r.upa + '</td>' +
+    '<td>' + r.species + '</td><td><b>' + totalPlanted + '</b></td><td>' + r.site + '</td>' +
+    '<td><span class="status-pill ' + statusClass(r.status) + '">' + statusLabel(r.status) + '</span></td></tr>';
+  }).join('');
+
+  // Total trees planted = total number of records
+  document.getElementById('s-total').textContent = records.length.toLocaleString();
+
+  // Update survival rate stat
+  var alive = records.filter(function(r){ return r.status === 'Alive'; }).length;
+  var dead  = records.filter(function(r){ return r.status === 'Dead'; }).length;
+  var care  = records.filter(function(r){ return r.status === 'Care Required'; }).length;
+  var survivalEl = document.getElementById('s-survival');
+  if (survivalEl && records.length > 0) {
+    survivalEl.textContent = Math.round(alive / records.length * 100) + '%';
+  }
+  // Update alive / dead / care stat cards if they exist
+  var sAlive = document.getElementById('s-alive'); if (sAlive) sAlive.textContent = alive;
+  var sDead  = document.getElementById('s-dead');  if (sDead)  sDead.textContent  = dead;
+  var sCare  = document.getElementById('s-care');  if (sCare)  sCare.textContent  = care;
+}
+
+// buildChart: delegated to RBAC section (see below) for month-chart
+// This stub keeps compatibility for report-chart
+function buildChart_legacy(id) {
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var vals = [8200,14500,21000,28000,35000,42000,38000,51000,46000,55000,49000,62000];
+  var max = Math.max(...vals);
+  var elBC = document.getElementById(id);
+  if (!elBC) return;
+  elBC.innerHTML = months.map((m,i) =>
+    '<div class="bar-wrap"><div class="bar-val">' + (vals[i]/1000).toFixed(0) + 'k</div>' +
+    '<div class="bar" style="height:' + Math.round(vals[i]/max*100) + 'px" title="' + m + ': ' + vals[i].toLocaleString() + ' trees"></div>' +
+    '<div class="bar-label">' + m + '</div></div>'
+  ).join('');
+}
+
+// ════════════════════════════════
 // GPS AUTO-FETCH
 // ════════════════════════════════
 function fetchGPS() {
@@ -1990,6 +2068,24 @@ function updateUpazilla() {
 // NOTE: saveRecord() is defined once, later in this file (see "function saveRecord"
 // further down), where it has the full edit/new + permission + Google Sheets sync logic.
 
+function clearForm() {
+  var ip = document.getElementById('inline-mon-panel'); if(ip) ip.style.display='none';
+  ['f-div','f-dis','f-upa','f-site','f-caregiver','f-caregiver-phone','f-remarks','f-date'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  var speciesSel = document.getElementById('f-species-sel');
+  if (speciesSel) speciesSel.selectedIndex = 0;
+  var catDisplay = document.getElementById('f-cat-display');
+  if (catDisplay) { catDisplay.textContent = '— auto-filled on species selection —'; catDisplay.style.color='#666'; catDisplay.style.fontWeight='400'; }
+  var catHidden = document.getElementById('f-cat');
+  if (catHidden) catHidden.value = '';
+  document.getElementById('photo-preview').innerHTML = '';
+  processedPhotos = [];
+  clearGPS();
+}
+
 function showAlert(id) {
   var el = document.getElementById(id);
   el.classList.add('show');
@@ -2016,6 +2112,39 @@ function statusLabel(s) {
 }
 
 function filterRecords() { renderRecords(); }
+
+function renderRecords() {
+  var fd = (document.getElementById('filter-div')?.value || '').toLowerCase();
+  var fc = (document.getElementById('filter-cat')?.value || '').toLowerCase();
+  var fs = (document.getElementById('filter-status')?.value || '').toLowerCase();
+  var fq = (document.getElementById('search-q')?.value || '').toLowerCase();
+  var filtered = records.filter(r =>
+    (!fd || r.div.toLowerCase() === fd) &&
+    (!fc || r.cat.toLowerCase().includes(fc)) &&
+    (!fs || r.status.toLowerCase().includes(fs)) &&
+    (!fq || r.species.toLowerCase().includes(fq) || r.upa.toLowerCase().includes(fq) || r.officer.toLowerCase().includes(fq) || r.site.toLowerCase().includes(fq))
+  );
+  document.getElementById('records-tbody').innerHTML = filtered.map(r => {
+    var totalPlanted = records.filter(function(x){ return x.species === r.species; }).length;
+    return '<tr>' +
+    '<td style="font-size:11px;color:#aaa">' + r.id + '</td>' +
+    '<td>' + r.date + '</td>' +
+    '<td><b>' + r.div + '</b></td>' +
+    '<td>' + r.dis + '</td>' +
+    '<td>' + r.upa + '</td>' +
+    '<td>' + r.species + '</td>' +
+    '<td><span style="font-size:11px;background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:20px">' + r.cat + '</span></td>' +
+    '<td><b style="color:#1a5c2a">' + totalPlanted + '</b></td>' +
+    '<td><span class="status-pill ' + statusClass(r.status) + '">' + statusLabel(r.status) + '</span></td>' +
+    '<td style="white-space:nowrap">' +
+    '<button class="btn btn-sm" onclick="viewRecord(\'' + r.id + '\')" style="font-size:11px;padding:3px 8px;margin-right:3px">👁 View</button>' +
+    '<button class="btn btn-sm" onclick="editRecord(\'' + r.id + '\')" style="font-size:11px;padding:3px 8px;margin-right:3px;border-color:#1976d2;color:#1565c0;background:#e3f2fd">✏️ Edit</button>' +
+    '<button class="btn btn-sm" onclick="deleteRecord(\'' + r.id + '\')" style="font-size:11px;padding:3px 8px;border-color:#c62828;color:#c62828;background:#ffebee">🗑 Delete</button>' +
+    '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('records-count').textContent = 'Showing ' + filtered.length + ' of ' + records.length + ' records';
+}
 
 function viewRecord(id) {
   var r = records.find(x => x.id === id);
@@ -2088,6 +2217,28 @@ function getStatusClass(status) {
   if (status === 'Dead') return 'dead';
   if (status === 'Care Required') return 'care';
   return 'pending';
+}
+
+function renderMonitoring() {
+  var fd   = (document.getElementById('mon-filter-div')?.value  || '');
+  var fdis = (document.getElementById('mon-filter-dis')?.value  || '');
+  var fupa = (document.getElementById('mon-filter-upa')?.value  || '');
+  var fq   = (document.getElementById('mon-search')?.value      || '').toLowerCase();
+
+  var filtered = records.filter(r =>
+    (!fd   || r.div === fd) &&
+    (!fdis || r.dis === fdis) &&
+    (!fupa || r.upa === fupa) &&
+    (!fq   || r.species.toLowerCase().includes(fq) || r.site.toLowerCase().includes(fq) || r.id.toLowerCase().includes(fq) || r.upa.toLowerCase().includes(fq))
+  );
+
+  if (filtered.length === 0) {
+    document.getElementById('mon-tbody').innerHTML =
+      '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:40px;font-size:13px">কোনো রেকর্ড পাওয়া যায়নি।</td></tr>';
+    return;
+  }
+
+  document.getElementById('mon-tbody').innerHTML = filtered.map(r => buildMonRow(r)).join('');
 }
 
 function buildMonRow(r) {
@@ -2198,7 +2349,13 @@ function showVisitHistory(rid) {
   document.getElementById('visit-history-modal').style.display = 'block';
 }
 
+
 // updateMonStatus no longer used (replaced by openMonModal flow)
+
+
+
+
+
 
 function triggerMonPhoto(rid) {
   var r = records.find(function(x){ return x.id === rid; });
@@ -2277,23 +2434,38 @@ function handleMonVisitPhoto(files) {
   if (!files || !files[0]) return;
   var file = files[0];
   var finish = function(dataUrl) {
-    if (!backendConfigured()) {
-      currentMonVisitPhoto = { url: dataUrl };
-      renderMonVisitPhotoPreview(dataUrl, false);
-      return;
-    }
-    renderMonVisitPhotoPreview(null, true);
+    // Show (and stage) a local copy immediately — this is what actually gets saved
+    // if the user hits "Save" before the Drive upload below finishes. Previously the
+    // photo was only staged AFTER the upload resolved, so a fast Save could save the
+    // visit with no photo at all even though a file was already sitting in Drive.
+    var staleSessionUrl = (currentMonVisitPhoto && currentMonVisitPhoto.url && currentMonVisitPhoto.url !== monVisitOldPhotoUrl)
+      ? currentMonVisitPhoto.url : null;
+    currentMonVisitPhoto = { url: dataUrl };
+    renderMonVisitPhotoPreview(dataUrl, false);
+    if (!backendConfigured()) return;
     var commaIdx = dataUrl.indexOf(',');
     var mime = (dataUrl.substring(5, dataUrl.indexOf(';')) || 'image/jpeg');
     var base64 = dataUrl.substring(commaIdx + 1);
     var uniqueName = (currentMonRecordId || 'visit') + '_visit_' + Date.now();
     apiCall('uploadImage', { filename: uniqueName, mime: mime, data: base64 }).then(function(res) {
+      // If the user already replaced or removed this photo while the upload was in
+      // flight, don't clobber their newer choice — but do clean up the orphaned file.
+      if (!currentMonVisitPhoto || currentMonVisitPhoto.url !== dataUrl) {
+        if (res && res.ok && res.fileId) apiCall('deleteImage', { fileId: res.fileId });
+        return;
+      }
       if (res && res.ok && res.url) {
         currentMonVisitPhoto = { url: res.url };
         renderMonVisitPhotoPreview(res.url, false);
-      } else {
-        alert('⚠️ ছবি আপলোড ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
-        renderMonVisitPhotoPreview(currentMonVisitPhoto ? currentMonVisitPhoto.url : null, false);
+        // If the visit was already saved (with the local copy) while this upload was
+        // still running, swap the local copy out for the lightweight Drive URL.
+        patchMonVisitPhotoIfAlreadySaved(dataUrl, res.url);
+      }
+      // On failure we simply keep the local (base64) copy already staged above —
+      // it still displays and saves correctly, it's just not backed by Drive.
+      if (staleSessionUrl) {
+        var oldFileId = driveFileIdFromUrl(staleSessionUrl);
+        if (oldFileId) apiCall('deleteImage', { fileId: oldFileId });
       }
     });
   };
@@ -2301,9 +2473,32 @@ function handleMonVisitPhoto(files) {
   else { resizeImage(file, 100 * 1024, function(blob){ readAsDataURL(blob, finish); }); }
 }
 
+// If saveMonitoringVisit() already ran while this photo's Drive upload was still in
+// flight, the visit was saved with the local base64 copy. Once the upload resolves,
+// swap that local copy out for the Drive URL so the record stays light and in sync.
+function patchMonVisitPhotoIfAlreadySaved(localDataUrl, driveUrl) {
+  var r = records.find(function(x){ return x.id === currentMonRecordId; });
+  if (!r || !r.monitoring) return;
+  var v = r.monitoring.find(function(m){ return m.photo === localDataUrl; });
+  if (!v) return;
+  v.photo = driveUrl;
+  apiCall('updateRecord', { record: r });
+  var histModal = document.getElementById('visit-history-modal');
+  if (histModal && histModal.style.display === 'block') showVisitHistory(currentMonRecordId);
+  renderMonitoring();
+}
+
 function clearMonVisitPhoto() {
+  // Delete any file that was already uploaded to Drive in this editing session but
+  // never got persisted onto the record (avoids leaving orphaned files in Drive).
+  var staleSessionUrl = (currentMonVisitPhoto && currentMonVisitPhoto.url && currentMonVisitPhoto.url !== monVisitOldPhotoUrl)
+    ? currentMonVisitPhoto.url : null;
   currentMonVisitPhoto = null;
   renderMonVisitPhotoPreview(null, false);
+  if (staleSessionUrl) {
+    var oldFileId = driveFileIdFromUrl(staleSessionUrl);
+    if (oldFileId) apiCall('deleteImage', { fileId: oldFileId });
+  }
 }
 
 function fetchMonGPS() {
@@ -2312,6 +2507,39 @@ function fetchMonGPS() {
     document.getElementById('mon-gps-lat').value = pos.coords.latitude.toFixed(6);
     document.getElementById('mon-gps-lon').value = pos.coords.longitude.toFixed(6);
   }, function(e){ alert('GPS error: '+e.message); }, {enableHighAccuracy:true,timeout:12000});
+}
+
+function clearMonGPS() {
+  document.getElementById('mon-gps-lat').value='';
+  document.getElementById('mon-gps-lon').value='';
+}
+
+function applyGPSRadius() {
+  var lat=parseFloat(document.getElementById('mon-gps-lat').value);
+  var lon=parseFloat(document.getElementById('mon-gps-lon').value);
+  var rad=parseFloat(document.getElementById('mon-gps-radius').value)||500;
+  if (isNaN(lat)||isNaN(lon)) { alert('দয়া করে সঠিক GPS স্থানাংক দিন (Latitude ও Longitude)'); return; }
+  function haversine(la1,lo1,la2,lo2){
+    var R=6371000,dLat=(la2-la1)*Math.PI/180,dLon=(lo2-lo1)*Math.PI/180;
+    var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
+  var inRadius = records.filter(r=>{
+    if(!r.lat||!r.lon) return false;
+    return haversine(lat,lon,parseFloat(r.lat),parseFloat(r.lon))<=rad;
+  });
+  // Render only those records in monitoring table
+  var res=document.getElementById('gps-radius-result');
+  res.style.display='block';
+  if(inRadius.length===0){
+    res.style.background='#fff8e1'; res.style.color='#f57f17';
+    res.textContent='⚠️ এই ব্যাসার্ধে কোনো গাছ পাওয়া যায়নি ('+rad+' মিটার)। GPS তথ্য ছাড়া রেকর্ড বাদ দেওয়া হয়েছে।';
+  } else {
+    res.style.background='#e8f5e9'; res.style.color='#1b5e20';
+    res.textContent='✅ '+inRadius.length+'টি গাছ পাওয়া গেছে '+rad+' মিটার ব্যাসার্ধে। নিচের তালিকায় দেখানো হচ্ছে।';
+  }
+  // Render filtered records in monitoring table
+  renderMonitoringFromList(inRadius);
 }
 
 function clearMonGPS() {
@@ -2502,6 +2730,7 @@ function toggleMonitoringFields() {
   document.getElementById('mon-replacement-wrap').style.display = status === 'Dead' ? 'block' : 'none';
   document.getElementById('mon-care-wrap').style.display = status === 'Care Required' ? 'block' : 'none';
 }
+
 
 function editMonVisitFromHistory(recordId, visitIdx) {
   document.getElementById('visit-history-modal').style.display = 'none';
@@ -2726,8 +2955,8 @@ var REPORT_SCOPE = { div: '', dis: '', upa: '' };
 var LAST_REPORT = { type: '', recs: [], from: '', to: '', scopeLabel: '' };
 
 function reportTypeLabel(t) {
-  return { summary:'Summary Report | সারসংক্ষেপ', detailed:'Detailed Record Report | বিস্তারিত তালিকা',
-    office:'Office Register Report | দপ্তরভিত্তিক নিবন্ধন', trend:'Monthly Trend Report | মাসিক প্রবণতা' }[t] || 'Report';
+  return { summary:'Summary Report', detailed:'Detailed Record Report',
+    office:'Office Register Report', trend:'Monthly Trend Report' }[t] || 'Report';
 }
 
 // ── Scope selector UI — built according to the logged-in role ───────
@@ -2742,22 +2971,22 @@ function renderReportScopeControls() {
   var html = '';
 
   if (SESSION.role === 'admin') {
-    html += '<div class="fg"><label>Circle | সার্কেল</label><select id="rs-div" onchange="onReportScopeChange()">' +
-      '<option value="">All Circles | সকল সার্কেল</option>' +
+    html += '<div class="fg"><label>Circle</label><select id="rs-div" onchange="onReportScopeChange()">' +
+      '<option value="">All Circles</option>' +
       divData.map(function(d){ return '<option value="'+d.name+'">'+d.name+'</option>'; }).join('') + '</select></div>' +
-      '<div class="fg"><label>District | জেলা</label><select id="rs-dis" onchange="onReportScopeChange()"><option value="">All Districts | সকল জেলা</option></select></div>' +
-      '<div class="fg"><label>Upazila | উপজেলা</label><select id="rs-upa" onchange="onReportScopeChange()"><option value="">All Upazilas | সকল উপজেলা</option></select></div>';
+      '<div class="fg"><label>District</label><select id="rs-dis" onchange="onReportScopeChange()"><option value="">All Districts</option></select></div>' +
+      '<div class="fg"><label>Upazila</label><select id="rs-upa" onchange="onReportScopeChange()"><option value="">All Upazilas</option></select></div>';
   } else if (SESSION.role === 'divisional') {
-    html += '<div class="fg"><label>Circle | সার্কেল</label><input type="text" value="' + SESSION.div + '" disabled></div>' +
-      '<div class="fg"><label>District | জেলা</label><select id="rs-dis" onchange="onReportScopeChange()"><option value="">All Districts in ' + SESSION.div + '</option>' +
+    html += '<div class="fg"><label>Circle</label><input type="text" value="' + SESSION.div + '" disabled></div>' +
+      '<div class="fg"><label>District</label><select id="rs-dis" onchange="onReportScopeChange()"><option value="">All Districts in ' + SESSION.div + '</option>' +
       (districtMap[SESSION.div]||[]).map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('') + '</select></div>' +
-      '<div class="fg"><label>Upazila | উপজেলা</label><select id="rs-upa" onchange="onReportScopeChange()"><option value="">All Upazilas</option></select></div>';
+      '<div class="fg"><label>Upazila</label><select id="rs-upa" onchange="onReportScopeChange()"><option value="">All Upazilas</option></select></div>';
   } else if (SESSION.role === 'district') {
-    html += '<div class="fg"><label>District | জেলা</label><input type="text" value="' + SESSION.dis + '" disabled></div>' +
-      '<div class="fg"><label>Upazila | উপজেলা</label><select id="rs-upa" onchange="onReportScopeChange()"><option value="">All Upazilas in ' + SESSION.dis + '</option>' +
+    html += '<div class="fg"><label>District</label><input type="text" value="' + SESSION.dis + '" disabled></div>' +
+      '<div class="fg"><label>Upazila</label><select id="rs-upa" onchange="onReportScopeChange()"><option value="">All Upazilas in ' + SESSION.dis + '</option>' +
       (upazillaMap[SESSION.dis]||[]).map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('') + '</select></div>';
   } else {
-    html += '<div class="fg"><label>Upazila | উপজেলা</label><input type="text" value="' + SESSION.upa + '" disabled></div>';
+    html += '<div class="fg"><label>Upazila</label><input type="text" value="' + SESSION.upa + '" disabled></div>';
   }
 
   wrap.innerHTML = html;
@@ -2771,7 +3000,7 @@ function onReportScopeChange() {
     if (disSel) {
       var opts = divVal ? (districtMap[divVal]||[]) : Object.keys(districtMap).reduce(function(a,k){ return a.concat(districtMap[k]); }, []);
       var curDis = disSel.value;
-      disSel.innerHTML = '<option value="">All Districts | সকল জেলা</option>' + opts.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
+      disSel.innerHTML = '<option value="">All Districts</option>' + opts.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
       if (opts.indexOf(curDis) !== -1) disSel.value = curDis;
     }
     var disVal = document.getElementById('rs-dis')?.value || '';
@@ -2779,7 +3008,7 @@ function onReportScopeChange() {
     if (upaSel) {
       var uopts = disVal ? (upazillaMap[disVal]||[]) : [];
       var curUpa = upaSel.value;
-      upaSel.innerHTML = '<option value="">All Upazilas | সকল উপজেলা</option>' + uopts.map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('');
+      upaSel.innerHTML = '<option value="">All Upazilas</option>' + uopts.map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('');
       if (uopts.indexOf(curUpa) !== -1) upaSel.value = curUpa;
     }
     REPORT_SCOPE = { div:divVal, dis:disVal, upa:(upaSel?upaSel.value:'') };
@@ -2848,7 +3077,7 @@ function generateReport() {
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px;gap:10px">' +
     '<div><h2 style="color:#1a5c2a;font-size:17px;margin-bottom:4px">📋 DPHE Tree Plantation Report — ' + reportTypeLabel(repType) + '</h2>' +
     '<p style="font-size:12px;color:#666">Scope: ' + LAST_REPORT.scopeLabel + '</p>' +
-    '<p style="font-size:12px;color:#666">Period: ' + fromDate + ' to ' + toDate + ' &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString() + '</p></div>' +
+    '<p style="font-size:12px;color:#666">Period: ' + fromDate + ' to ' + toDate + '</p></div>' +
     '<div class="no-print" style="display:flex;gap:6px">' +
     '<button class="btn btn-sm btn-primary" onclick="window.print()">🖨️ Print</button>' +
     '<button class="btn btn-sm" style="border-color:#1976d2;color:#1976d2" onclick="exportReportCSV()">⬇️ CSV</button>' +
@@ -2895,9 +3124,9 @@ function buildSummaryReport(recs) {
     '<div class="rep-stat" style="border-top-color:#6a1b9a"><div class="lbl">Total Cost (BDT)</div><div class="val" style="color:#6a1b9a;font-size:17px">'+fmtBDT(totalCost)+'</div></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
-    '<div><div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Office-wise Breakdown | দপ্তরভিত্তিক</div>' +
+    '<div><div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Office-wise Breakdown</div>' +
     '<table class="mon-table"><thead><tr><th>Office</th><th>Trees</th><th>Chart</th></tr></thead><tbody>'+officeBreakdown+'</tbody></table></div>' +
-    '<div><div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Species Planted | প্রজাতি</div>' +
+    '<div><div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Species Planted</div>' +
     '<table class="mon-table"><thead><tr><th>Species</th><th>Count</th></tr></thead><tbody>'+topSpecies+'</tbody></table></div>' +
     '</div>';
 }
@@ -2930,10 +3159,10 @@ function buildOfficeRegisterReport(recs) {
   var byOffice = {};
   recs.forEach(function(r) {
     var o = officeInfo(r);
-    if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, species:{}, sources:{}, cost:0, remarks:[] };
+    if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, remarks:[] };
     var b = byOffice[o.key];
     b.count++;
-    b.species[r.species] = true;
+    b.cats[r.cat || 'Others'] = true;
     b.sources[r.fund || '—'] = true;
     b.cost += (parseFloat(r.cost) || 0);
     if (r.remarks && b.remarks.indexOf(r.remarks) === -1) b.remarks.push(r.remarks);
@@ -2941,11 +3170,11 @@ function buildOfficeRegisterReport(recs) {
 
   var rows = Object.keys(byOffice).sort(function(a,b){ return byOffice[a].name.localeCompare(byOffice[b].name); }).map(function(k, i) {
     var b = byOffice[k];
-    var speciesList = Object.keys(b.species).join(', ');
+    var catList = Object.keys(b.cats).sort().join(', ');
     var sourceList = Object.keys(b.sources).join(', ');
     var activity = b.remarks.length ? b.remarks.join(' | ') : 'No remarks recorded for this office';
     return '<tr><td>' + (i+1) + '</td><td><b>' + b.name + '</b></td><td style="text-align:center">' + b.count + '</td>' +
-      '<td>' + speciesList + '</td><td>' + sourceList + '</td>' +
+      '<td>' + catList + '</td><td>' + sourceList + '</td>' +
       '<td style="text-align:right;color:#6a1b9a;font-weight:600">' + fmtBDT(b.cost) + '</td>' +
       '<td style="max-width:260px">' + activity + '</td></tr>';
   }).join('') || '<tr><td colspan="7" style="color:#aaa;text-align:center;padding:20px">No data</td></tr>';
@@ -2953,11 +3182,11 @@ function buildOfficeRegisterReport(recs) {
   var grandTrees = recs.length;
   var grandCost = costSum(recs);
 
-  return '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Office-wise Plantation Register | দপ্তরভিত্তিক বৃক্ষরোপণ নিবন্ধন</div>' +
+  return '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Office-wise Plantation Register</div>' +
     '<div style="overflow-x:auto"><table class="mon-table" id="office-reg-table" style="min-width:960px">' +
-    '<thead><tr><th>Sl. | ক্রম</th><th>Office / Institution Name | দপ্তর/প্রতিষ্ঠান</th><th>Tree Count | বৃক্ষ সংখ্যা</th><th>Species / Type | প্রজাতি</th><th>Cost Source | ব্যয়ের উৎস</th><th>Cost Amount | ব্যয়</th><th>Care/Maintenance Activity Taken | পরিচর্যা কার্যক্রম</th></tr></thead>' +
+    '<thead><tr><th>Sl.</th><th>Office / Institution Name</th><th>Tree Count</th><th>Species Category</th><th>Cost Source</th><th>Cost Amount</th><th>Care/Maintenance Activity Taken</th></tr></thead>' +
     '<tbody>' + rows + '</tbody>' +
-    '<tfoot><tr style="background:#e8f5e9;font-weight:700"><td colspan="2">Total | মোট</td><td style="text-align:center">' + grandTrees + '</td><td></td><td></td><td style="text-align:right">' + fmtBDT(grandCost) + '</td><td></td></tr></tfoot>' +
+    '<tfoot><tr style="background:#e8f5e9;font-weight:700"><td colspan="2">Total</td><td style="text-align:center">' + grandTrees + '</td><td></td><td></td><td style="text-align:right">' + fmtBDT(grandCost) + '</td><td></td></tr></tfoot>' +
     '</table></div>';
 }
 
@@ -2994,7 +3223,7 @@ function buildTrendReport(recs) {
     return '<tr><td>' + m.label + '</td><td>' + m.count + '</td><td style="color:#6a1b9a">' + fmtBDT(m.cost) + '</td></tr>';
   }).join('');
 
-  return '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Monthly Trend | মাসিক প্রবণতা</div>' +
+  return '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Monthly Trend</div>' +
     chart +
     '<table class="mon-table" id="trend-rep-table"><thead><tr><th>Month</th><th>Trees Planted</th><th>Cost (BDT)</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
@@ -3009,16 +3238,20 @@ function exportReportCSV() {
     var byOffice = {};
     recs.forEach(function(r) {
       var o = officeInfo(r);
-      if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, species:{}, sources:{}, cost:0, remarks:[] };
+      if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, remarks:[] };
       var b = byOffice[o.key];
-      b.count++; b.species[r.species]=true; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      b.count++; b.cats[r.cat||'Others']=true; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
       if (r.remarks && b.remarks.indexOf(r.remarks)===-1) b.remarks.push(r.remarks);
     });
-    headers = ['Sl','Office Name','Tree Count','Species/Type','Cost Source','Cost Amount (BDT)','Care/Maintenance Activity'];
-    rows = Object.keys(byOffice).sort(function(a,b){return byOffice[a].name.localeCompare(byOffice[b].name);}).map(function(k,i){
+    var officeKeysCsv = Object.keys(byOffice).sort(function(a,b){return byOffice[a].name.localeCompare(byOffice[b].name);});
+    headers = ['Sl','Office Name','Tree Count','Species Category','Cost Source','Cost Amount (BDT)','Care/Maintenance Activity'];
+    rows = officeKeysCsv.map(function(k,i){
       var b = byOffice[k];
-      return [i+1, b.name, b.count, Object.keys(b.species).join('; '), Object.keys(b.sources).join('; '), Math.round(b.cost), b.remarks.join(' | ')||'—'];
+      return [i+1, b.name, b.count, Object.keys(b.cats).sort().join('; '), Object.keys(b.sources).join('; '), Math.round(b.cost), b.remarks.join(' | ')||'—'];
     });
+    var csvGrandTrees = officeKeysCsv.reduce(function(sum,k){ return sum + byOffice[k].count; }, 0);
+    var csvGrandCost = officeKeysCsv.reduce(function(sum,k){ return sum + byOffice[k].cost; }, 0);
+    rows.push(['', 'Total', csvGrandTrees, '', '', Math.round(csvGrandCost), '']);
   } else if (LAST_REPORT.type === 'trend') {
     var dates = recs.map(function(r){ return r.date; }).filter(Boolean).sort();
     var months = [];
@@ -3085,17 +3318,31 @@ function arrayBufferToBase64(buffer) {
 function loadPdfFonts() {
   if (PDF_FONT_READY) return Promise.resolve(true);
   if (PDF_FONT_LOADING) return PDF_FONT_LOADING;
-  PDF_FONT_LOADING = Promise.all([
-    fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/hindsiliguri/HindSiliguri-Regular.ttf').then(function(r){ if(!r.ok) throw new Error('font fetch failed'); return r.arrayBuffer(); }),
-    fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/hindsiliguri/HindSiliguri-SemiBold.ttf').then(function(r){ if(!r.ok) throw new Error('font fetch failed'); return r.arrayBuffer(); }),
-  ]).then(function(bufs) {
-    PDF_FONT_B64_REGULAR = arrayBufferToBase64(bufs[0]);
-    PDF_FONT_B64_BOLD = arrayBufferToBase64(bufs[1]);
-    PDF_FONT_READY = true;
-    return true;
-  }).catch(function(e) {
-    console.warn('Bangla PDF font could not be loaded, falling back to English-only PDF:', e);
-    return false;
+  var sources = [
+    { reg:'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/hindsiliguri/HindSiliguri-Regular.ttf',
+      bold:'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/hindsiliguri/HindSiliguri-SemiBold.ttf' },
+    { reg:'https://raw.githubusercontent.com/google/fonts/main/ofl/hindsiliguri/HindSiliguri-Regular.ttf',
+      bold:'https://raw.githubusercontent.com/google/fonts/main/ofl/hindsiliguri/HindSiliguri-SemiBold.ttf' },
+  ];
+  var tryLoad = function(idx) {
+    if (idx >= sources.length) return Promise.resolve(false);
+    var s = sources[idx];
+    return Promise.all([
+      fetch(s.reg).then(function(r){ if(!r.ok) throw new Error('font fetch failed'); return r.arrayBuffer(); }),
+      fetch(s.bold).then(function(r){ if(!r.ok) throw new Error('font fetch failed'); return r.arrayBuffer(); }),
+    ]).then(function(bufs) {
+      PDF_FONT_B64_REGULAR = arrayBufferToBase64(bufs[0]);
+      PDF_FONT_B64_BOLD = arrayBufferToBase64(bufs[1]);
+      PDF_FONT_READY = true;
+      return true;
+    }).catch(function(e) {
+      console.warn('Bangla PDF font source failed, trying next:', e);
+      return tryLoad(idx + 1);
+    });
+  };
+  PDF_FONT_LOADING = tryLoad(0).then(function(ok) {
+    if (!ok) console.warn('Bangla PDF font could not be loaded from any source, falling back to English-only PDF.');
+    return ok;
   });
   return PDF_FONT_LOADING;
 }
@@ -3160,9 +3407,8 @@ async function exportReportPDF(btnEl) {
   var metaY = 90;
   doc.text(txt('Scope: ' + LAST_REPORT.scopeLabel), margin, metaY);
   doc.text('Period: ' + LAST_REPORT.from + ' to ' + LAST_REPORT.to, margin, metaY + 14);
-  doc.text('Generated: ' + new Date().toLocaleString(), margin, metaY + 28);
 
-  var startY = metaY + 48;
+  var startY = metaY + 34;
   var tableFontStyles = { font: FONT };
 
   if (LAST_REPORT.type === 'summary') {
@@ -3195,20 +3441,27 @@ async function exportReportPDF(btnEl) {
     var byOffice2 = {};
     recs.forEach(function(r) {
       var o = officeInfo(r);
-      if (!byOffice2[o.key]) byOffice2[o.key] = { name:o.name, count:0, species:{}, sources:{}, cost:0, remarks:[] };
+      if (!byOffice2[o.key]) byOffice2[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, remarks:[] };
       var b = byOffice2[o.key];
-      b.count++; b.species[r.species]=true; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      b.count++; b.cats[r.cat||'Others']=true; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
       if (r.remarks && b.remarks.indexOf(r.remarks)===-1) b.remarks.push(r.remarks);
     });
-    var body = Object.keys(byOffice2).sort(function(a,b){return byOffice2[a].name.localeCompare(byOffice2[b].name);}).map(function(k,i){
+    var officeKeys = Object.keys(byOffice2).sort(function(a,b){return byOffice2[a].name.localeCompare(byOffice2[b].name);});
+    var body = officeKeys.map(function(k,i){
       var b = byOffice2[k];
-      return [String(i+1), txt(b.name), String(b.count), txt(Object.keys(b.species).join(', ')), txt(Object.keys(b.sources).join(', ')), fmtBDT(b.cost), txt(b.remarks.join(' | ')||'—')];
+      return [String(i+1), txt(b.name), String(b.count), txt(Object.keys(b.cats).sort().join(', ')), txt(Object.keys(b.sources).join(', ')), fmtBDT(b.cost), txt(b.remarks.join(' | ')||'—')];
     });
+    var grandTrees = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].count; }, 0);
+    var grandCost = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].cost; }, 0);
     doc.autoTable({
       startY:startY, margin:{left:margin,right:margin},
-      head:[['Sl','Office Name','Trees','Species','Cost Source','Cost (BDT)','Care/Maintenance Activity']],
-      body:body, headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:8},tableFontStyles),
-      bodyStyles:Object.assign({fontSize:7.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+      head:[['Sl','Office Name','Trees','Species Category','Cost Source','Cost (BDT)','Care/Maintenance Activity']],
+      body:body,
+      foot:[['', 'Total', String(grandTrees), '', '', fmtBDT(grandCost), '']],
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:8},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:7.5},tableFontStyles),
+      footStyles:Object.assign({fillColor:[232,245,233],textColor:[26,92,42],fontSize:8,fontStyle:'bold'},tableFontStyles),
+      theme:'grid', styles:tableFontStyles,
       columnStyles:{6:{cellWidth:130}},
     });
 
@@ -3254,6 +3507,53 @@ async function exportReportPDF(btnEl) {
 // ════════════════════════════════
 // USERS — পূর্ণ পারমিশন সিস্টেম
 // ════════════════════════════════
+
+function renderUsers(filterText) {
+  var roleColors = {'HQ Admin':'badge-admin','Divisional':'badge-div','Circle Officer':'badge-div','District':'badge-dis','Upazilla':'badge-upa'};
+  var list = filterText
+    ? users.filter(u => u.name.toLowerCase().includes(filterText.toLowerCase()) || u.email.toLowerCase().includes(filterText.toLowerCase()))
+    : users;
+
+  document.getElementById('users-tbody').innerHTML = list.map(function(u, i) {
+    var realIdx = users.indexOf(u);
+    var permCount = (u.perms || []).length;
+    var maxPerm = PERM_DEFS.length;
+    var permBar = Math.round(permCount / maxPerm * 100);
+    var permColor = permBar > 66 ? '#2d8a42' : permBar > 33 ? '#f57c00' : '#c62828';
+
+    // পারমিশন ব্যাজ সারি
+    var permBadges = (u.perms || []).slice(0,5).map(function(p) {
+      var def = PERM_DEFS.find(function(d){return d.key===p;});
+      return def ? '<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:#e8f5e9;color:#1a5c2a;margin:1px;display:inline-block">' + def.label.split(' ')[0] + '</span>' : '';
+    }).join('');
+    if ((u.perms||[]).length > 5) permBadges += '<span style="font-size:10px;color:#aaa">+' + ((u.perms||[]).length - 5) + '</span>';
+
+    return '<tr>' +
+      '<td style="color:#aaa;font-size:12px">' + (realIdx+1) + '</td>' +
+      '<td><b>' + u.name + '</b><div style="font-size:11px;color:#888;margin-top:2px">' + (u.phone||'') + '</div></td>' +
+      '<td style="font-size:12px;color:#666">' + u.email + '</td>' +
+      '<td>' +
+        '<span class="user-role nav-badge ' + (roleColors[u.role]||'') + '">' + u.role + '</span>' +
+      '</td>' +
+      '<td style="font-size:12px;color:#666">' + u.office + '</td>' +
+      '<td>' +
+        '<div style="font-size:11px;color:#888;margin-bottom:4px">' + u.last + '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<div style="flex:1;height:5px;background:#f0f0f0;border-radius:3px;overflow:hidden">' +
+            '<div style="width:' + permBar + '%;height:100%;background:' + permColor + ';border-radius:3px"></div>' +
+          '</div>' +
+          '<span style="font-size:10px;color:#888;white-space:nowrap">' + permCount + '/' + PERM_DEFS.length + ' পারমিশন</span>' +
+        '</div>' +
+        '<div style="margin-top:4px">' + permBadges + '</div>' +
+      '</td>' +
+      '<td><span class="status-pill ' + (u.active ? 'status-alive' : 'status-dead') + '">' + (u.active ? '✅ সক্রিয়' : '🔴 নিষ্ক্রিয়') + '</span></td>' +
+      '<td style="white-space:nowrap">' +
+        '<button class="btn btn-sm" style="font-size:11px;margin-bottom:4px;width:100%;background:#e3f2fd;color:#1565c0;border-color:#1976d2" onclick="openPermModal(' + realIdx + ')">🔑 পারমিশন পরিচালনা</button><br>' +
+        '<button class="btn btn-sm" style="font-size:11px;width:100%;' + (u.active ? 'color:#c62828;border-color:#c62828' : 'color:#1a5c2a;border-color:#2d8a42') + '" onclick="toggleUser(' + realIdx + ')">' + (u.active ? '🔒 নিষ্ক্রিয় করুন' : '✅ সক্রিয় করুন') + '</button>' +
+      '</td>' +
+      '</tr>';
+  }).join('');
+}
 
 function filterUsers(q) { renderUsers(q); }
 
@@ -3310,6 +3610,41 @@ function toggleUserPassField() {
 function closeUserForm() {
   document.getElementById('add-user-form').style.display = 'none';
   resetUserForm();
+}
+
+function updateRolePermDefaults() {
+  var role = document.getElementById('u-role').value;
+  var defaults = ROLE_DEFAULT_PERMS[role] || [];
+  PERM_DEFS.forEach(function(def) {
+    var el = document.getElementById('perm-' + def.key);
+    if (!el) return;
+    el.checked = defaults.includes(def.key);
+    el.disabled = false;
+    el.closest('label').style.opacity = '1';
+    el.closest('label').title = '';
+  });
+}
+
+function addUser() {
+  var name = document.getElementById('u-name').value.trim();
+  var email = document.getElementById('u-email').value.trim();
+  var role = document.getElementById('u-role').value;
+  var office = document.getElementById('u-office').value.trim();
+  if (!name || !email) { alert('নাম এবং ইউজারনেম আবশ্যক'); return; }
+
+  var perms = PERM_DEFS
+    .filter(function(def){ var el=document.getElementById('perm-'+def.key); return el&&el.checked&&!el.disabled; })
+    .map(function(def){ return def.key; });
+
+  users.push({
+    name: name, email: email, role: role, office: office,
+    phone: document.getElementById('u-phone').value,
+    last: 'কখনো না', active: true, perms: perms,
+    fieldPerms: buildDefaultFieldPerms(perms)
+  });
+  renderUsers();
+  document.getElementById('add-user-form').style.display = 'none';
+  ['u-name','u-email','u-office','u-pass','u-phone'].forEach(function(id){ document.getElementById(id).value=''; });
 }
 
 // ── পারমিশন Modal (Field-Level Accordion) ──
@@ -3682,7 +4017,7 @@ function updateSpeciesEntry(idx) {
 }
 
 function downloadSpeciesTemplate() {
-  var csv = 'English Name,Bengali Name,Scientific Name,Category\nMango,আম,Mangifera indica,Fruit tree — ফলজ\nNeem,নিম,Azadirachta indica,Medicinal — ওষুধি';
+  var csv = 'English Name,Bengali Name,Scientific Name,Category\nMango,আম,Mangifera indica,Fruit tree\nNeem,নিম,Azadirachta indica,Medicinal';
   var blob = new Blob([csv],{type:'text/csv'});
   var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -3705,7 +4040,7 @@ function parseBulkSpeciesText(text) {
       var existsAlready = TREE_LIST.some(function(t){ return t.en.toLowerCase() === parts[0].toLowerCase(); }) ||
         toAdd.some(function(t){ return t.en.toLowerCase() === parts[0].toLowerCase(); });
       if (!existsAlready) {
-        toAdd.push({ en: parts[0], bn: parts[1], sci: parts[2] || '', cat: parts[3] || 'Others — অন্যান্য' });
+        toAdd.push({ en: parts[0], bn: parts[1], sci: parts[2] || '', cat: parts[3] || 'Others' });
       }
     }
   });
@@ -3776,6 +4111,8 @@ function showBulkAlert(msg) {
   setTimeout(function(){ el.style.display='none'; }, 4000);
 }
 
+
+
 function filterSpeciesTable() {
   var q = (document.getElementById('species-search')?.value || '').toLowerCase();
   var rows = document.querySelectorAll('#species-tbody tr');
@@ -3791,6 +4128,7 @@ function filterSpeciesTable() {
 }
 
 // Override clearForm to also reset edit state
+var _origClearForm = clearForm;
 function clearForm() {
   ['f-div','f-dis','f-upa','f-site','f-lat','f-lon','f-date','f-caregiver','f-caregiver-phone','f-remarks','f-cost'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
@@ -3914,6 +4252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+
 
 // ════════════════════════════════════════════════════════════════════
 // ENTERPRISE RBAC SYSTEM
@@ -4207,7 +4546,7 @@ function onLoginEmailChange() {
   var hint = document.getElementById('login-type-hint');
   if (hint) hint.style.display = 'none';
   if (_loginTypeCheckTimer) clearTimeout(_loginTypeCheckTimer);
-  if (!email || email.indexOf('@') === -1) { setPasswordFieldVisible(false); return; }
+  if (!email || email.indexOf('@') === -1) { setPasswordFieldVisible(true); return; }
   _loginTypeCheckTimer = setTimeout(function(){ checkLoginType(email); }, 400);
 }
 
@@ -4354,6 +4693,7 @@ function roleKeyFromLabel(label) {
 }
 
 // ── Logout: also invalidate server-side session token ──────────────
+var _origLogout2 = logout;
 function logout() {
   if (!confirm('Logout করতে চান?')) return;
   if (backendConfigured() && AUTH_TOKEN) { apiCall('logout', {}); }
@@ -4540,6 +4880,7 @@ function lockLocationFields() {
 }
 
 // ── Override renderRecords to scope data ───────────────────────────
+var _origRenderRecords = renderRecords;
 function renderRecords() {
   var myRecs = scopedRecords();
   var fd = (document.getElementById('filter-div')?.value || '').toLowerCase();
@@ -4580,6 +4921,7 @@ function renderRecords() {
 }
 
 // ── Override renderMonitoring to scope data ────────────────────────
+var _origRenderMonitoring = renderMonitoring;
 function renderMonitoring() {
   var myRecs = scopedRecords();
   var fd   = (document.getElementById('mon-filter-div')?.value  || '');
@@ -4601,6 +4943,7 @@ function renderMonitoring() {
 }
 
 // ── Override initDashboard to include RBAC elements ────────────────
+var _origInitDashboard = initDashboard;
 function initDashboard() {
   renderScopeBanner();
   renderCompareSection();
@@ -4888,6 +5231,7 @@ function updateUserUpazilla() {
 }
 
 // ── Enhanced addUser — include location fields ─────────────────────
+var _origAddUser = addUser;
 function addUser() {
   var editIdx = parseInt(document.getElementById('u-edit-idx')?.value || '-1', 10);
   var isEdit = editIdx >= 0 && users[editIdx];
@@ -4990,7 +5334,10 @@ function openEditUserModal(idx) {
   f.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
+
+
 // ── Enhanced renderUsers — show location ──────────────────────────
+var _origRenderUsers = renderUsers;
 function renderUsers(filterText) {
   var q = (filterText||'').toLowerCase();
   var tbody = document.getElementById('users-tbody');
@@ -5062,6 +5409,7 @@ function applyGPSRadius() {
 }
 
 // ── Report export — scope-aware ────────────────────────────────────
+var _origExportCSV = exportCSV;
 function exportCSV() {
   if (!hasPerm('export')) { alert('আপনার এই কাজ করার অনুমতি নেই।'); return; }
   var rows = scopedRecords();
@@ -5080,6 +5428,7 @@ function exportCSV() {
 }
 
 // ── showPage RBAC guard ────────────────────────────────────────────
+var _origShowPage = showPage;
 function showPage(id, el) {
   // Permission check
   var permMap = {
