@@ -2169,7 +2169,7 @@ function viewRecord(id) {
   var currentPhoto = r.photo || ((r.photos && r.photos.length) ? r.photos[r.photos.length - 1] : null);
   var photoHtml = currentPhoto
     ? '<div style="text-align:center;margin-bottom:14px">' +
-        '<img src="' + currentPhoto + '" alt="Tree photo" style="max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid #e0e0e0;object-fit:cover">' +
+        '<img src="' + embeddablePhotoUrl(currentPhoto) + '" alt="Tree photo" style="max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid #e0e0e0;object-fit:cover">' +
         '<div style="font-size:11px;color:#888;margin-top:4px">Current photo</div>' +
       '</div>'
     : '<div style="text-align:center;margin-bottom:14px;padding:24px;background:#f5f5f5;border-radius:10px;color:#aaa;font-size:12px">📷 কোনো ছবি আপলোড করা হয়নি — No photo uploaded</div>';
@@ -2358,7 +2358,7 @@ function showVisitHistory(rid) {
           (v.notes ? '<div style="font-size:11px;color:#333">' + v.notes + '</div>' : '') +
           (v.careDetail ? '<div style="font-size:11px;color:#e65100;margin-top:3px">🔧 ' + v.careDetail + '</div>' : '') +
           (v.replacement && v.replacement!=='no' ? '<div style="font-size:11px;color:#1565c0;margin-top:3px">🔄 Replacement: ' + v.replacement + '</div>' : '') +
-          (v.photo ? '<img src="'+v.photo+'" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid #fff;margin-top:6px;box-shadow:0 1px 4px rgba(0,0,0,0.15)">' : '') +
+          (v.photo ? '<img src="'+embeddablePhotoUrl(v.photo)+'" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid #fff;margin-top:6px;box-shadow:0 1px 4px rgba(0,0,0,0.15)">' : '') +
         '</div>';
       }).join('');
   document.getElementById('visit-history-body').innerHTML = html;
@@ -2432,6 +2432,19 @@ function driveFileIdFromUrl(url) {
   return m ? m[1] : null;
 }
 
+// Google's `uc?export=view` link (what actionUploadImage used to return) is
+// unreliable for direct <img> embedding — Drive often serves a warning/blocked
+// response instead of the image itself, which shows up as a broken-image icon.
+// The `thumbnail` endpoint is the format Google actually intends for hotlinking,
+// so every render site normalizes through this first. Non-Drive sources (local
+// data:/blob: preview URLs during upload) don't match the id= pattern and are
+// returned untouched.
+function embeddablePhotoUrl(url) {
+  if (!url) return url;
+  var id = driveFileIdFromUrl(url);
+  return id ? ('https://drive.google.com/thumbnail?id=' + id + '&sz=w1000') : url;
+}
+
 // A tree has exactly ONE "current" photo at any time (r.photo) — it starts as the
 // plantation photo (from Add Record / the initial catch-up uploader) and is then
 // superseded by whichever monitoring visit most recently uploaded a photo. Setting a
@@ -2459,9 +2472,9 @@ function renderMonVisitPhotoPreview(url, uploading) {
   var prev = document.getElementById('mon-photo-preview');
   var rb = document.getElementById('mon-photo-remove-btn');
   if (!prev) return;
-  if (uploading) { prev.innerHTML = '<img src="'+url+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #c8e6c9;opacity:0.55"><div style="font-size:11px;color:#888;margin-top:4px">⏳ Uploading photo…</div>'; if (rb) rb.style.display='none'; return; }
+  if (uploading) { prev.innerHTML = '<img src="'+embeddablePhotoUrl(url)+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #c8e6c9;opacity:0.55"><div style="font-size:11px;color:#888;margin-top:4px">⏳ Uploading photo…</div>'; if (rb) rb.style.display='none'; return; }
   if (!url) { prev.innerHTML=''; if (rb) rb.style.display='none'; return; }
-  prev.innerHTML = '<img src="'+url+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #c8e6c9">';
+  prev.innerHTML = '<img src="'+embeddablePhotoUrl(url)+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #c8e6c9">';
   if (rb) rb.style.display = 'inline-block';
 }
 
