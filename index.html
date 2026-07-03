@@ -2049,6 +2049,19 @@ function showPhotoPreview(file, origKB, newKB, wasResized) {
 // ════════════════════════════════
 // FORM — SAVE RECORD
 // ════════════════════════════════
+// Globally-unique tree ID, safe across multiple devices/officers working at once.
+// IMPORTANT: this must NEVER be derived from records.length (or any other value
+// that depends on what THIS device happens to have loaded). Two devices that both
+// last synced when there were, say, 20 records would otherwise both compute the
+// exact same "TRK-000000021" for a brand-new tree. Whichever save reaches the
+// backend second then silently overwrites the first (because the backend matches
+// rows by ID) — the first officer's tree effectively disappears, which looks
+// exactly like "records/photos from other devices never show up."
+function generateUniqueTreeId() {
+  var ts  = Date.now().toString(36).toUpperCase();               // time component
+  var rnd = Math.random().toString(36).substr(2, 5).toUpperCase(); // per-call randomness
+  return 'TRK-' + ts + '-' + rnd;
+}
 function updateDistrict() {
   var div = document.getElementById('f-div').value;
   var dis = document.getElementById('f-dis');
@@ -2130,7 +2143,7 @@ function renderRecords() {
   document.getElementById('records-tbody').innerHTML = filtered.map(r => {
     var totalPlanted = records.filter(function(x){ return x.species === r.species; }).length;
     return '<tr>' +
-    '<td style="font-size:11px;color:#aaa">' + r.id + '</td>' +
+    '<td style="font-size:11px;color:#aaa">' + r.id + (r._syncFailed ? ' <span title="এই রেকর্ড এখনো Google Sheets-এ সংরক্ষণ হয়নি" style="background:#ffebee;color:#c62828;font-size:10px;font-weight:bold;padding:1px 6px;border-radius:10px;white-space:nowrap">⚠️ Sync failed</span>' : '') + '</td>' +
     '<td>' + r.date + '</td>' +
     '<td><b>' + r.div + '</b></td>' +
     '<td>' + r.dis + '</td>' +
@@ -2893,7 +2906,6 @@ function saveMonitoringVisit() {
 
   currentMonEditIndex = null;
   closeMonModal();
-  showAlert('mon-alert-success');
   renderMonitoring();
   renderRecords();
   initDashboard();
@@ -2903,9 +2915,19 @@ function saveMonitoringVisit() {
     renderInlineMonitoring(currentMonRecordId);
   }
 
-  // Google Sheets sync
+  // Google Sheets sync — don't celebrate until the backend confirms it, since a visit
+  // that only lives in this browser's memory is exactly what "other device can't see the
+  // new visit/photo" looks like.
   apiCall('updateRecord', {record: r}).then(function(res){
-    showSyncStatus(res && res.ok ? '☁️ Monitoring saved to Sheets' : '⚠️ Sync failed', !!(res&&res.ok));
+    var ok = !!(res && res.ok);
+    showSyncStatus(ok ? '☁️ Monitoring saved to Sheets' : '⚠️ Sync failed', ok);
+    r._syncFailed = !ok;
+    if (ok) {
+      showAlert('mon-alert-success');
+    } else {
+      alert('❌ এই পরিদর্শন (monitoring visit) সার্ভারে সংরক্ষণ করা যায়নি!\n\nকারণ: ' + (res && res.error ? res.error : 'নেটওয়ার্ক/সার্ভার ত্রুটি') + '\n\nএটি শুধু এই ডিভাইসে আছে — অন্য ডিভাইসে এই ভিজিট/ছবি দেখা যাবে না, এবং পেজ রিফ্রেশ করলে হারিয়ে যেতে পারে। ইন্টারনেট চেক করে আবার Save করুন।');
+    }
+    renderRecords();
   });
 }
 
@@ -4243,16 +4265,25 @@ function saveRecord() {
         if (failedCount) alert('⚠️ ' + failedCount + ' টি ছবি আপলোড ব্যর্থ হয়েছে এবং সংরক্ষিত হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন।');
       }
       apiCall('updateRecord', {record: r}).then(function(res){
-        showSyncStatus(res && res.ok ? '☁️ Updated in Google Sheets' : '⚠️ Sync failed', !!(res&&res.ok));
+        var ok = !!(res && res.ok);
+        showSyncStatus(ok ? '☁️ Updated in Google Sheets' : '⚠️ Sync failed', ok);
+        r._syncFailed = !ok;
+        var successEl = document.getElementById('add-alert-success');
+        if (ok) {
+          successEl.textContent = '✅ Record updated successfully! রেকর্ড আপডেট হয়েছে।';
+          showAlert('add-alert-success');
+        } else {
+          alert('❌ পরিবর্তনগুলো সার্ভারে (Google Sheets) সংরক্ষণ করা যায়নি!\n\nকারণ: ' + (res && res.error ? res.error : 'নেটওয়ার্ক/সার্ভার ত্রুটি') + '\n\nএই পরিবর্তন শুধু এই ডিভাইসে আছে — অন্য কোনো ডিভাইসে দেখা যাবে না। ইন্টারনেট সংযোগ পরীক্ষা করে আবার Save করুন।');
+        }
+        renderRecords();
       });
       renderInlineMonitoring(editId);
     }
-    var successEl=document.getElementById('add-alert-success');
-    successEl.textContent='✅ Record updated successfully! রেকর্ড আপডেট হয়েছে।';
-    showAlert('add-alert-success');
   } else {
-    // New record
-    var newId = 'TRK-' + String(records.length + 1).padStart(9,'0');
+    // New record — ID is generated with generateUniqueTreeId(), NOT from records.length,
+    // so two devices creating a tree at the same time can never collide on the same ID
+    // and silently overwrite each other on the backend (see comment above that function).
+    var newId = generateUniqueTreeId();
     var newRec = {
       id:newId, date:date, level:level, div:div||'', dis:dis||'', upa:upa||'', site:site,
       species:species, cat:catShort, count:0, officer:'—',
@@ -4265,18 +4296,30 @@ function saveRecord() {
       lon:document.getElementById('f-lon').value,
       remarks:document.getElementById('f-remarks').value,
       photos: processedPhotos.map(function(p){ return p.url; }).filter(Boolean),
-      monitoring:[]
+      monitoring:[],
+      _syncFailed:false
     };
     if (newRec.photos.length) newRec.photo = newRec.photos[newRec.photos.length-1];
     var failedNewCount = processedPhotos.filter(function(p){ return p.failed; }).length;
     if (failedNewCount) alert('⚠️ ' + failedNewCount + ' টি ছবি আপলোড ব্যর্থ হয়েছে এবং সংরক্ষিত হয়নি। প্রয়োজনে Edit থেকে আবার যোগ করুন।');
     records.push(newRec);
+    // Don't declare success until the backend actually confirms it — otherwise the
+    // officer sees "✅ Saved" even when the write never reached Google Sheets, and has
+    // no reason to know the record won't be visible on any other device.
     apiCall('addRecord', {record: newRec}).then(function(res){
-      showSyncStatus(res && res.ok ? '☁️ Saved to Google Sheets' : '⚠️ Sync failed', !!(res&&res.ok));
+      var ok = !!(res && res.ok);
+      showSyncStatus(ok ? '☁️ Saved to Google Sheets' : '⚠️ Sync failed', ok);
+      var successEl2 = document.getElementById('add-alert-success');
+      if (ok) {
+        newRec._syncFailed = false;
+        successEl2.textContent = '✅ Record saved successfully! বৃক্ষরোপণ তথ্য সংরক্ষিত হয়েছে।';
+        showAlert('add-alert-success');
+      } else {
+        newRec._syncFailed = true;
+        alert('❌ রেকর্ডটি সার্ভারে (Google Sheets) সংরক্ষণ করা যায়নি!\n\nকারণ: ' + (res && res.error ? res.error : 'নেটওয়ার্ক/সার্ভার ত্রুটি') + '\n\nএই রেকর্ডটি শুধু এই ডিভাইসে আছে — অন্য কোনো ডিভাইসে দেখা যাবে না, এবং পেজ রিফ্রেশ/লগআউট করলে হারিয়ে যেতে পারে। ইন্টারনেট সংযোগ পরীক্ষা করে আবার Save করুন, অথবা Records তালিকায় "⚠️ Sync failed" চিহ্নিত এই আইটেমটি থেকে পরে আবার চেষ্টা করুন।');
+      }
+      renderRecords();
     });
-    var successEl2=document.getElementById('add-alert-success');
-    successEl2.textContent='✅ Record saved successfully! বৃক্ষরোপণ তথ্য সংরক্ষিত হয়েছে।';
-    showAlert('add-alert-success');
   }
   clearForm();
   initDashboard();
