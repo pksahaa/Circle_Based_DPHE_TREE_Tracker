@@ -1000,10 +1000,10 @@ tr:hover td{background:#f8fdf8}
     <div class="card-title"><span>➕</span> <span id="user-form-title">Add New User</span></div>
     <input type="hidden" id="u-edit-idx" value="-1">
     <div class="form-grid">
-      <div class="fg"><label>পূর্ণ নাম *</label><input type="text" id="u-name" placeholder="কর্মকর্তার পূর্ণ নাম"></div>
-      <div class="fg"><label>ইউজারনেম / ইমেইল *</label><input type="text" id="u-email" placeholder="username@dphe.gov.bd"></div>
+      <div class="fg"><label>Full Name *</label><input type="text" id="u-name" placeholder="Officer's full name"></div>
+      <div class="fg"><label>Username / Email *</label><input type="text" id="u-email" placeholder="username@dphe.gov.bd"></div>
       <div class="fg">
-        <label>ভূমিকা (Role) *</label>
+        <label>Role *</label>
         <select id="u-role" onchange="updateRolePermDefaults()">
           <option value="HQ Admin">🛡️ HQ Admin</option>
           <option value="Divisional">🏢 Circle Officer</option>
@@ -1011,22 +1011,22 @@ tr:hover td{background:#f8fdf8}
           <option value="Upazilla">📍 Upazilla Officer</option>
         </select>
       </div>
-      <div class="fg"><label>অফিস</label><input type="text" id="u-office" placeholder="অফিসের নাম ও অবস্থান"></div>
+      <div class="fg"><label>Office</label><input type="text" id="u-office" placeholder="Office name and location"></div>
       <div class="fg">
-        <label>লগইন পদ্ধতি (Login Type) *</label>
+        <label>Login Type *</label>
         <select id="u-login-type" onchange="toggleUserPassField()">
-          <option value="password">🔑 Password প্রয়োজন</option>
-          <option value="nopassword">🔓 শুধু Email — Password ছাড়া</option>
+          <option value="password">🔑 Password required</option>
+          <option value="nopassword">🔓 Email only — no password</option>
         </select>
       </div>
-      <div class="fg" id="u-pass-wrap"><label id="u-pass-label">পাসওয়ার্ড *</label><input type="password" id="u-pass" placeholder="প্রাথমিক পাসওয়ার্ড"></div>
-      <div class="fg"><label>মোবাইল</label><input type="text" id="u-phone" placeholder="01XXXXXXXXX"></div>
+      <div class="fg" id="u-pass-wrap"><label id="u-pass-label">Password *</label><input type="password" id="u-pass" placeholder="Initial password"></div>
+      <div class="fg"><label>Mobile</label><input type="text" id="u-phone" placeholder="01XXXXXXXXX"></div>
     </div>
 
     <!-- RBAC: Location assignment (cascading) -->
     <div id="user-location-fields" style="display:none;margin-top:14px" class="role-location-row">
       <div class="fg">
-        <label>Circle সার্কেল</label>
+        <label>Circle</label>
         <select id="u-div" onchange="updateUserDistrict()">
           <option value="">— Select Circle —</option>
           <option>Barishal Circle</option>
@@ -1042,13 +1042,13 @@ tr:hover td{background:#f8fdf8}
         </select>
       </div>
       <div class="fg" id="u-dis-wrap" style="display:none">
-        <label>District জেলা</label>
+        <label>District</label>
         <select id="u-dis" onchange="updateUserUpazilla()">
           <option value="">— Select District —</option>
         </select>
       </div>
       <div class="fg" id="u-upa-wrap" style="display:none">
-        <label>Upazilla উপজেলা</label>
+        <label>Upazilla</label>
         <select id="u-upa">
           <option value="">— Select Upazilla —</option>
         </select>
@@ -1056,40 +1056,40 @@ tr:hover td{background:#f8fdf8}
     </div>
     <!-- Permission Checkboxes -->
     <div style="margin-top:14px;background:#f0f7f0;border-radius:10px;padding:16px">
-      <div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:10px">🔑 পারমিশন সেটিং — এই ব্যবহারকারী কী করতে পারবে?</div>
+      <div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:10px">🔑 Permission Settings — What can this user do?</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="new-user-perms">
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-dashboard" checked> 📊 Dashboard দেখা
+          <input type="checkbox" id="perm-dashboard" checked> 📊 View Dashboard
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-add"> 🌱 রেকর্ড যোগ করা
+          <input type="checkbox" id="perm-add"> 🌱 Add Records
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-edit"> ✏️ রেকর্ড সম্পাদনা
+          <input type="checkbox" id="perm-edit"> ✏️ Edit Records
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-delete"> 🗑️ রেকর্ড মুছে ফেলা
+          <input type="checkbox" id="perm-delete"> 🗑️ Delete Records
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-monitoring"> 🔍 Monitoring করা
+          <input type="checkbox" id="perm-monitoring"> 🔍 Do Monitoring
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-records"> 📋 সব রেকর্ড দেখা
+          <input type="checkbox" id="perm-records"> 📋 View All Records
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-map"> 🗺️ Map দেখা
+          <input type="checkbox" id="perm-map"> 🗺️ View Map
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-species"> 🌿 Species পরিচালনা
+          <input type="checkbox" id="perm-species"> 🌿 Manage Species
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-reports"> 📈 Reports দেখা
+          <input type="checkbox" id="perm-reports"> 📈 View Reports
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-export"> ⬇️ CSV Export করা
+          <input type="checkbox" id="perm-export"> ⬇️ Export CSV
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-photo"> 📷 ছবি আপলোড
+          <input type="checkbox" id="perm-photo"> 📷 Upload Photos
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
           <input type="checkbox" id="perm-users"> 👥 User Management
@@ -1137,7 +1137,7 @@ tr:hover td{background:#f8fdf8}
 <!-- Monitoring Modal -->
 <div id="mon-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;max-width:520px;margin:40px auto;padding:24px;position:relative">
-    <div id="mon-modal-title" style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:16px">🔍 নতুন পরিদর্শন রেকর্ড করুন</div>
+    <div id="mon-modal-title" style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:16px">🔍 New Visit Record</div>
     <div id="mon-modal-info" style="font-size:13px;color:#555;margin-bottom:14px;background:#f0f7f0;padding:10px;border-radius:8px"></div>
     <div class="form-grid">
       <div class="fg">
@@ -1187,8 +1187,8 @@ tr:hover td{background:#f8fdf8}
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn" onclick="closeMonModal()">বাতিল</button>
-      <button class="btn btn-primary" onclick="saveMonitoringVisit()">💾 সংরক্ষণ করুন</button>
+      <button class="btn" onclick="closeMonModal()">Cancel</button>
+      <button class="btn btn-primary" id="mon-save-btn" onclick="saveMonitoringVisit()">💾 Save</button>
     </div>
   </div>
 </div>
@@ -1196,11 +1196,11 @@ tr:hover td{background:#f8fdf8}
 <!-- Visit History Modal -->
 <div id="visit-history-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;max-width:560px;margin:40px auto;padding:24px;position:relative">
-    <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:4px">📋 পরিদর্শন ইতিহাস</div>
+    <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:4px">📋 Visit History</div>
     <div id="visit-history-tree-info" style="font-size:12px;color:#888;margin-bottom:14px"></div>
     <div id="visit-history-body" style="max-height:420px;overflow-y:auto"></div>
     <div class="btn-row" style="margin-top:16px">
-      <button class="btn btn-primary" onclick="document.getElementById('visit-history-modal').style.display='none';currentMonRecordId=null;">বন্ধ করুন</button>
+      <button class="btn btn-primary" onclick="document.getElementById('visit-history-modal').style.display='none';currentMonRecordId=null;">Close</button>
     </div>
   </div>
 </div>
@@ -1973,7 +1973,10 @@ function uploadPhotoToDrive(filename, dataUrl, sizeKB) {
       slot.url = res.url;
       slot.data = null; // drop heavy base64 once we have the Drive URL
     } else {
-      console.warn('Photo upload failed, keeping local copy only:', res && res.error);
+      slot.failed = true;
+      slot.data = null; // never persist raw base64 into the record — it can blow past
+                         // Google Sheets' ~50,000 character-per-cell limit and break sync
+      console.warn('Photo upload failed, will be skipped:', res && res.error);
     }
   });
 }
@@ -2150,11 +2153,11 @@ function viewRecord(id) {
   var r = records.find(x => x.id === id);
   if (!r) return;
 
-  var latestPhoto = (r.photos && r.photos.length) ? r.photos[r.photos.length - 1] : null;
-  var photoHtml = latestPhoto
+  var currentPhoto = r.photo || ((r.photos && r.photos.length) ? r.photos[r.photos.length - 1] : null);
+  var photoHtml = currentPhoto
     ? '<div style="text-align:center;margin-bottom:14px">' +
-        '<img src="' + latestPhoto + '" alt="Tree photo" style="max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid #e0e0e0;object-fit:cover">' +
-        (r.photos.length > 1 ? '<div style="font-size:11px;color:#888;margin-top:4px">সর্বশেষ ছবি ('+r.photos.length+'টির মধ্যে) — Latest photo (of '+r.photos.length+')</div>' : '<div style="font-size:11px;color:#888;margin-top:4px">সর্বশেষ ছবি — Latest photo</div>') +
+        '<img src="' + currentPhoto + '" alt="Tree photo" style="max-width:100%;max-height:260px;border-radius:10px;border:1.5px solid #e0e0e0;object-fit:cover">' +
+        '<div style="font-size:11px;color:#888;margin-top:4px">Current photo</div>' +
       '</div>'
     : '<div style="text-align:center;margin-bottom:14px;padding:24px;background:#f5f5f5;border-radius:10px;color:#aaa;font-size:12px">📷 কোনো ছবি আপলোড করা হয়নি — No photo uploaded</div>';
 
@@ -2383,6 +2386,7 @@ function triggerMonPhoto(rid) {
       apiCall('uploadImage', { filename: uniqueName, mime: mime, data: base64 }).then(function(res) {
         if (res && res.ok && res.url) {
           r.photos = [res.url];
+          if (!r.photo) r.photo = res.url; // becomes the tree's current photo until a monitoring visit supersedes it
           renderMonitoring();
           apiCall('updateRecord', { record: r }).then(function(res2) {
             showSyncStatus(res2 && res2.ok ? '☁️ Initial photo saved' : '⚠️ Sync failed', !!(res2 && res2.ok));
@@ -2404,8 +2408,10 @@ function triggerMonPhoto(rid) {
 }
 
 // ── Per-visit photo (Monitoring "New Visit" modal) — camera/gallery, one photo per visit ──
-var currentMonVisitPhoto = null;   // { url } currently staged for the open modal
+var currentMonVisitPhoto = null;   // { url } — always either null or a real Drive URL (never base64) once settled
 var monVisitOldPhotoUrl  = null;   // photo that was on the visit before this edit session (for Drive cleanup)
+var monVisitPhotoUploadPromise = null; // in-flight upload promise; Save waits for this before proceeding
+var monVisitPhotoRequestSeq = 0;   // guards against a stale upload response clobbering a newer selection
 
 function driveFileIdFromUrl(url) {
   if (!url) return null;
@@ -2413,9 +2419,25 @@ function driveFileIdFromUrl(url) {
   return m ? m[1] : null;
 }
 
+// A tree has exactly ONE "current" photo at any time (r.photo) — it starts as the
+// plantation photo (from Add Record / the initial catch-up uploader) and is then
+// superseded by whichever monitoring visit most recently uploaded a photo. Setting a
+// new current photo deletes whatever was current before it from Drive, so old copies
+// never pile up — only the latest photo is ever kept.
+function setCurrentTreePhoto(r, newUrl) {
+  var oldUrl = r.photo || ((r.photos && r.photos.length) ? r.photos[r.photos.length - 1] : null);
+  r.photo = newUrl;
+  if (backendConfigured() && oldUrl && oldUrl !== newUrl) {
+    var oldFileId = driveFileIdFromUrl(oldUrl);
+    if (oldFileId) apiCall('deleteImage', { fileId: oldFileId });
+  }
+}
+
 function resetMonVisitPhotoUI() {
   currentMonVisitPhoto = null;
   monVisitOldPhotoUrl = null;
+  monVisitPhotoUploadPromise = null;
+  monVisitPhotoRequestSeq++;
   ['mon-photo-gallery-input','mon-photo-camera-input'].forEach(function(id){ var el=document.getElementById(id); if (el) el.value=''; });
   renderMonVisitPhotoPreview(null, false);
 }
@@ -2424,68 +2446,60 @@ function renderMonVisitPhotoPreview(url, uploading) {
   var prev = document.getElementById('mon-photo-preview');
   var rb = document.getElementById('mon-photo-remove-btn');
   if (!prev) return;
-  if (uploading) { prev.innerHTML = '<div style="font-size:11px;color:#888">⏳ Uploading photo…</div>'; if (rb) rb.style.display='none'; return; }
+  if (uploading) { prev.innerHTML = '<img src="'+url+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #c8e6c9;opacity:0.55"><div style="font-size:11px;color:#888;margin-top:4px">⏳ Uploading photo…</div>'; if (rb) rb.style.display='none'; return; }
   if (!url) { prev.innerHTML=''; if (rb) rb.style.display='none'; return; }
   prev.innerHTML = '<img src="'+url+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #c8e6c9">';
   if (rb) rb.style.display = 'inline-block';
 }
 
+// A visit's photo is NEVER saved as raw base64 — the record (with all its monitoring
+// visits) is stored as one JSON cell in Google Sheets, which has a hard ~50,000
+// character-per-cell limit. A single embedded photo alone can exceed that, silently
+// breaking the sync (record wouldn't show up on other devices). So: show the local
+// image immediately for feedback, but keep currentMonVisitPhoto null until the Drive
+// upload actually resolves to a short URL, and make Save wait for that to finish.
 function handleMonVisitPhoto(files) {
   if (!files || !files[0]) return;
   var file = files[0];
   var finish = function(dataUrl) {
-    // Show (and stage) a local copy immediately — this is what actually gets saved
-    // if the user hits "Save" before the Drive upload below finishes. Previously the
-    // photo was only staged AFTER the upload resolved, so a fast Save could save the
-    // visit with no photo at all even though a file was already sitting in Drive.
+    if (!backendConfigured()) {
+      // Local test mode only (no Drive) — nothing to upload to, so keep the data URL.
+      currentMonVisitPhoto = { url: dataUrl };
+      renderMonVisitPhotoPreview(dataUrl, false);
+      return;
+    }
     var staleSessionUrl = (currentMonVisitPhoto && currentMonVisitPhoto.url && currentMonVisitPhoto.url !== monVisitOldPhotoUrl)
       ? currentMonVisitPhoto.url : null;
-    currentMonVisitPhoto = { url: dataUrl };
-    renderMonVisitPhotoPreview(dataUrl, false);
-    if (!backendConfigured()) return;
+    currentMonVisitPhoto = null;
+    renderMonVisitPhotoPreview(dataUrl, true);
     var commaIdx = dataUrl.indexOf(',');
     var mime = (dataUrl.substring(5, dataUrl.indexOf(';')) || 'image/jpeg');
     var base64 = dataUrl.substring(commaIdx + 1);
     var uniqueName = (currentMonRecordId || 'visit') + '_visit_' + Date.now();
-    apiCall('uploadImage', { filename: uniqueName, mime: mime, data: base64 }).then(function(res) {
-      // If the user already replaced or removed this photo while the upload was in
-      // flight, don't clobber their newer choice — but do clean up the orphaned file.
-      if (!currentMonVisitPhoto || currentMonVisitPhoto.url !== dataUrl) {
+    var myRequestId = ++monVisitPhotoRequestSeq;
+    monVisitPhotoUploadPromise = apiCall('uploadImage', { filename: uniqueName, mime: mime, data: base64 }).then(function(res) {
+      if (myRequestId !== monVisitPhotoRequestSeq) {
+        // Superseded by a newer photo pick / clear / modal close while this was uploading.
         if (res && res.ok && res.fileId) apiCall('deleteImage', { fileId: res.fileId });
         return;
       }
+      monVisitPhotoUploadPromise = null;
       if (res && res.ok && res.url) {
         currentMonVisitPhoto = { url: res.url };
         renderMonVisitPhotoPreview(res.url, false);
-        // If the visit was already saved (with the local copy) while this upload was
-        // still running, swap the local copy out for the lightweight Drive URL.
-        patchMonVisitPhotoIfAlreadySaved(dataUrl, res.url);
-      }
-      // On failure we simply keep the local (base64) copy already staged above —
-      // it still displays and saves correctly, it's just not backed by Drive.
-      if (staleSessionUrl) {
-        var oldFileId = driveFileIdFromUrl(staleSessionUrl);
-        if (oldFileId) apiCall('deleteImage', { fileId: oldFileId });
+        if (staleSessionUrl) {
+          var oldFileId = driveFileIdFromUrl(staleSessionUrl);
+          if (oldFileId) apiCall('deleteImage', { fileId: oldFileId });
+        }
+      } else {
+        currentMonVisitPhoto = null;
+        renderMonVisitPhotoPreview(null, false);
+        alert('⚠️ ছবি Drive-এ আপলোড ব্যর্থ হয়েছে। আবার চেষ্টা করে দেখুন।');
       }
     });
   };
   if (file.size <= 102400) { readAsDataURL(file, finish); }
   else { resizeImage(file, 100 * 1024, function(blob){ readAsDataURL(blob, finish); }); }
-}
-
-// If saveMonitoringVisit() already ran while this photo's Drive upload was still in
-// flight, the visit was saved with the local base64 copy. Once the upload resolves,
-// swap that local copy out for the Drive URL so the record stays light and in sync.
-function patchMonVisitPhotoIfAlreadySaved(localDataUrl, driveUrl) {
-  var r = records.find(function(x){ return x.id === currentMonRecordId; });
-  if (!r || !r.monitoring) return;
-  var v = r.monitoring.find(function(m){ return m.photo === localDataUrl; });
-  if (!v) return;
-  v.photo = driveUrl;
-  apiCall('updateRecord', { record: r });
-  var histModal = document.getElementById('visit-history-modal');
-  if (histModal && histModal.style.display === 'block') showVisitHistory(currentMonRecordId);
-  renderMonitoring();
 }
 
 function clearMonVisitPhoto() {
@@ -2494,6 +2508,8 @@ function clearMonVisitPhoto() {
   var staleSessionUrl = (currentMonVisitPhoto && currentMonVisitPhoto.url && currentMonVisitPhoto.url !== monVisitOldPhotoUrl)
     ? currentMonVisitPhoto.url : null;
   currentMonVisitPhoto = null;
+  monVisitPhotoUploadPromise = null;
+  monVisitPhotoRequestSeq++; // invalidate any in-flight upload response
   renderMonVisitPhotoPreview(null, false);
   if (staleSessionUrl) {
     var oldFileId = driveFileIdFromUrl(staleSessionUrl);
@@ -2662,7 +2678,7 @@ function openMonModal(recordId) {
     return;
   }
 
-  document.getElementById('mon-modal-title').textContent = '🔍 নতুন পরিদর্শন রেকর্ড করুন';
+  document.getElementById('mon-modal-title').textContent = '🔍 New Visit Record';
   document.getElementById('mon-modal-info').innerHTML =
     '<b>' + r.id + '</b> — ' + r.species + '<br>' +
     r.site + ', ' + r.upa + ' | রোপণ: <b>' + r.date + '</b>' +
@@ -2700,7 +2716,7 @@ function openMonModalEdit(recordId, visitIdx) {
   if (!r || !r.monitoring || !r.monitoring[visitIdx]) return;
   var v = r.monitoring[visitIdx];
 
-  document.getElementById('mon-modal-title').textContent = '✏️ পরিদর্শন রেকর্ড সম্পাদনা করুন (Visit #' + (v.visitNo || visitIdx+1) + ')';
+  document.getElementById('mon-modal-title').textContent = '✏️ Edit Visit Record (Visit #' + (v.visitNo || visitIdx+1) + ')';
   document.getElementById('mon-modal-info').innerHTML =
     '<b>' + r.id + '</b> — ' + r.species + '<br>' +
     r.site + ', ' + r.upa + ' | রোপণ: <b>' + r.date + '</b>' +
@@ -2767,6 +2783,18 @@ function closeMonModal() {
 }
 
 function saveMonitoringVisit() {
+  // If a photo is still uploading to Drive, wait for it instead of saving without
+  // it (or worse, saving raw base64 into the record — see handleMonVisitPhoto).
+  if (monVisitPhotoUploadPromise) {
+    var btn = document.getElementById('mon-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Uploading photo…'; }
+    monVisitPhotoUploadPromise.then(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
+      saveMonitoringVisit();
+    });
+    return;
+  }
+
   var r = records.find(x => x.id === currentMonRecordId);
   if (!r) return;
 
@@ -2835,11 +2863,18 @@ function saveMonitoringVisit() {
     photo: currentMonVisitPhoto ? currentMonVisitPhoto.url : null,
   };
 
-  // If this visit's photo was replaced or removed, delete the old Drive file
-  // (keeps Drive storage usage low — old copies aren't kept once superseded).
-  if (backendConfigured() && monVisitOldPhotoUrl && monVisitOldPhotoUrl !== entry.photo) {
-    var oldFileId = driveFileIdFromUrl(monVisitOldPhotoUrl);
-    if (oldFileId) apiCall('deleteImage', { fileId: oldFileId });
+  // A new/changed photo on this visit becomes the tree's single "current" photo —
+  // whatever was current before (the plantation photo, or an earlier visit's photo)
+  // is deleted from Drive so only the latest photo is ever kept around.
+  if (entry.photo && entry.photo !== monVisitOldPhotoUrl) {
+    setCurrentTreePhoto(r, entry.photo);
+  } else if (!entry.photo && monVisitOldPhotoUrl) {
+    // Photo was removed from this visit during editing.
+    if (backendConfigured()) {
+      var removedFileId = driveFileIdFromUrl(monVisitOldPhotoUrl);
+      if (removedFileId) apiCall('deleteImage', { fileId: removedFileId });
+    }
+    if (r.photo === monVisitOldPhotoUrl) r.photo = null;
   }
 
   if (isEditing) {
@@ -4151,6 +4186,17 @@ function clearForm() {
 function saveRecord() {
   if (!hasPerm('add')) { alert('আপনার নতুন রেকর্ড যোগ করার অনুমতি নেই।'); return; }
   var btn = document.getElementById('save-record-btn');
+  // Records (with all their photos) are stored as one JSON cell in Google Sheets,
+  // which has a hard ~50,000 character-per-cell limit. Embedding a raw base64 photo
+  // there can blow past that and silently break sync — so wait for every photo's
+  // Drive upload to finish (getting a short URL) before the record can be saved.
+  var stillUploading = processedPhotos.some(function(p){ return p.uploading; });
+  if (stillUploading) {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Uploading photo(s)…'; }
+    setTimeout(saveRecord, 400);
+    return;
+  }
+  if (btn) { btn.disabled = false; }
   var editId = btn ? btn.getAttribute('data-edit-id') : null;
   var level = document.getElementById('f-level')?.value || 'upazila';
   var div = document.getElementById('f-div').value;
@@ -4188,7 +4234,13 @@ function saveRecord() {
       r.lon=document.getElementById('f-lon').value;
       r.remarks=document.getElementById('f-remarks').value;
       if (processedPhotos.length) {
-        r.photos = (r.photos||[]).concat(processedPhotos.map(function(p){ return p.url || p.data; }).filter(Boolean));
+        var uploadedUrls = processedPhotos.map(function(p){ return p.url; }).filter(Boolean);
+        var failedCount = processedPhotos.filter(function(p){ return p.failed; }).length;
+        if (uploadedUrls.length) {
+          r.photos = (r.photos||[]).concat(uploadedUrls);
+          if (!r.photo) r.photo = uploadedUrls[uploadedUrls.length-1];
+        }
+        if (failedCount) alert('⚠️ ' + failedCount + ' টি ছবি আপলোড ব্যর্থ হয়েছে এবং সংরক্ষিত হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন।');
       }
       apiCall('updateRecord', {record: r}).then(function(res){
         showSyncStatus(res && res.ok ? '☁️ Updated in Google Sheets' : '⚠️ Sync failed', !!(res&&res.ok));
@@ -4212,9 +4264,12 @@ function saveRecord() {
       lat:document.getElementById('f-lat').value,
       lon:document.getElementById('f-lon').value,
       remarks:document.getElementById('f-remarks').value,
-      photos: processedPhotos.map(function(p){ return p.url || p.data; }).filter(Boolean),
+      photos: processedPhotos.map(function(p){ return p.url; }).filter(Boolean),
       monitoring:[]
     };
+    if (newRec.photos.length) newRec.photo = newRec.photos[newRec.photos.length-1];
+    var failedNewCount = processedPhotos.filter(function(p){ return p.failed; }).length;
+    if (failedNewCount) alert('⚠️ ' + failedNewCount + ' টি ছবি আপলোড ব্যর্থ হয়েছে এবং সংরক্ষিত হয়নি। প্রয়োজনে Edit থেকে আবার যোগ করুন।');
     records.push(newRec);
     apiCall('addRecord', {record: newRec}).then(function(res){
       showSyncStatus(res && res.ok ? '☁️ Saved to Google Sheets' : '⚠️ Sync failed', !!(res&&res.ok));
@@ -4685,7 +4740,49 @@ function enterAppAsUser(u) {
   document.getElementById('mon-date').value = new Date().toISOString().split('T')[0];
   populateSpeciesDropdown();
   applyFieldPermissions();
+
+  // Remember this session locally so refreshing the page doesn't force a re-login.
+  saveSessionLocally(u.email);
 }
+
+// ── Session persistence across page refreshes ───────────────────────
+// Only the auth token + email are stored locally — never the password.
+function saveSessionLocally(email) {
+  try { localStorage.setItem('dphe_session', JSON.stringify({ token: AUTH_TOKEN, email: email })); } catch(e) {}
+}
+function clearSavedSession() {
+  try { localStorage.removeItem('dphe_session'); } catch(e) {}
+}
+function trySessionRestore() {
+  var raw;
+  try { raw = localStorage.getItem('dphe_session'); } catch(e) { return; }
+  if (!raw) return;
+  var saved;
+  try { saved = JSON.parse(raw); } catch(e) { return; }
+  if (!saved || !saved.email) return;
+
+  showLoading('Restoring session…');
+
+  if (backendConfigured()) {
+    if (!saved.token) { hideLoading(); return; }
+    AUTH_TOKEN = saved.token;
+    apiCall('getAll').then(function(res) {
+      hideLoading();
+      if (!res || !res.ok) { clearSavedSession(); AUTH_TOKEN = null; return; } // token expired/invalid
+      if (res.records) records = res.records;
+      if (res.users)   users   = res.users;
+      if (res.species && res.species.length) TREE_LIST = res.species;
+      var matchedUser = users.find(function(u){ return u.email && u.email.toLowerCase() === saved.email.toLowerCase(); });
+      if (!matchedUser) { clearSavedSession(); AUTH_TOKEN = null; return; }
+      enterAppAsUser(matchedUser);
+    });
+  } else {
+    hideLoading();
+    var matchedUser = users.find(function(u){ return u.email && u.email.toLowerCase() === saved.email.toLowerCase(); });
+    if (matchedUser) enterAppAsUser(matchedUser); else clearSavedSession();
+  }
+}
+document.addEventListener('DOMContentLoaded', trySessionRestore);
 
 function roleKeyFromLabel(label) {
   var map = { 'HQ Admin':'admin', 'Divisional':'divisional', 'Circle Officer':'divisional', 'District':'district', 'Upazilla':'upazilla' };
@@ -4698,6 +4795,7 @@ function logout() {
   if (!confirm('Logout করতে চান?')) return;
   if (backendConfigured() && AUTH_TOKEN) { apiCall('logout', {}); }
   AUTH_TOKEN = null;
+  clearSavedSession();
   document.getElementById('login-screen').style.display = 'block';
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('login-pass').value = '';
