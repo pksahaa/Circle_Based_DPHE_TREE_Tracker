@@ -977,6 +977,8 @@ tr:hover td{background:#f8fdf8}
           <option value="detailed">Detailed Record Report</option>
           <option value="office">Office Register Report</option>
           <option value="trend">Monthly Trend Report</option>
+          <option value="species_detail">Detailed Species Report</option>
+          <option value="species_summary">Species Report</option>
         </select>
       </div>
       <div class="fg"><label>From Date</label><input type="date" id="rep-from"></div>
@@ -3080,7 +3082,8 @@ var LAST_REPORT = { type: '', recs: [], from: '', to: '', scopeLabel: '' };
 
 function reportTypeLabel(t) {
   return { summary:'Summary Report', detailed:'Detailed Record Report',
-    office:'Office Register Report', trend:'Monthly Trend Report' }[t] || 'Report';
+    office:'Office Register Report', trend:'Monthly Trend Report',
+    species_detail:'Detailed Species Report', species_summary:'Species Report' }[t] || 'Report';
 }
 
 // ── Scope selector UI — built according to the logged-in role ───────
@@ -3213,6 +3216,8 @@ function generateReport() {
   else if (repType === 'detailed') bodyHtml = buildDetailedReport(recs);
   else if (repType === 'office')   bodyHtml = buildOfficeRegisterReport(recs);
   else if (repType === 'trend')    bodyHtml = buildTrendReport(recs);
+  else if (repType === 'species_detail')  bodyHtml = buildSpeciesDetailReport(recs);
+  else if (repType === 'species_summary') bodyHtml = buildSpeciesSummaryReport(recs);
   else                              bodyHtml = buildSummaryReport(recs);
 
   contentEl.innerHTML = '<div style="background:#f8fdf8;border:1px solid #c8e6c9;border-radius:8px;padding:20px">' + headerHtml + bodyHtml + '</div>';
@@ -3229,16 +3234,13 @@ function buildSummaryReport(recs) {
   var totalCost = costSum(recs);
 
   var byOffice = {};
-  recs.forEach(function(r){ var o=officeInfo(r); byOffice[o.name]=(byOffice[o.name]||0)+1; });
-  var maxO = Math.max.apply(null, Object.values(byOffice).concat([1]));
-  var officeBreakdown = Object.keys(byOffice).sort().map(function(k){
-    return '<tr><td>'+k+'</td><td>'+byOffice[k]+'</td><td><div style="width:'+Math.round(byOffice[k]/maxO*120)+'px;height:8px;background:#2d8a42;border-radius:4px"></div></td></tr>';
+  recs.forEach(function(r){ var o=officeInfo(r); if(!byOffice[o.key]) byOffice[o.key]={name:o.name,count:0}; byOffice[o.key].count++; });
+  var officeKeysSummary = Object.keys(byOffice).sort(compareOfficeKeys);
+  var maxO = Math.max.apply(null, officeKeysSummary.map(function(k){ return byOffice[k].count; }).concat([1]));
+  var officeBreakdown = officeKeysSummary.map(function(k){
+    var b = byOffice[k];
+    return '<tr><td>'+b.name+'</td><td>'+b.count+'</td><td><div style="width:'+Math.round(b.count/maxO*120)+'px;height:8px;background:#2d8a42;border-radius:4px"></div></td></tr>';
   }).join('') || '<tr><td colspan="3" style="color:#aaa;text-align:center">No data</td></tr>';
-
-  var speciesCount = {};
-  recs.forEach(function(r){ speciesCount[r.species] = (speciesCount[r.species]||0)+1; });
-  var topSpecies = Object.entries(speciesCount).sort(function(a,b){return b[1]-a[1];})
-    .map(function(e){ return '<tr><td>'+e[0]+'</td><td><b>'+e[1]+'</b></td></tr>'; }).join('') || '<tr><td colspan="2" style="color:#aaa;text-align:center">No data</td></tr>';
 
   return '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">' +
     '<div class="rep-stat"><div class="lbl">Total Trees Planted</div><div class="val">'+total+'</div></div>' +
@@ -3247,12 +3249,69 @@ function buildSummaryReport(recs) {
     '<div class="rep-stat" style="border-top-color:#f57c00"><div class="lbl">Need Care</div><div class="val" style="color:#f57c00">'+care+'</div></div>' +
     '<div class="rep-stat" style="border-top-color:#6a1b9a"><div class="lbl">Total Cost (BDT)</div><div class="val" style="color:#6a1b9a;font-size:17px">'+fmtBDT(totalCost)+'</div></div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
     '<div><div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Office-wise Breakdown</div>' +
-    '<table class="mon-table"><thead><tr><th>Office</th><th>Trees</th><th>Chart</th></tr></thead><tbody>'+officeBreakdown+'</tbody></table></div>' +
-    '<div><div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Species Planted</div>' +
-    '<table class="mon-table"><thead><tr><th>Species</th><th>Count</th></tr></thead><tbody>'+topSpecies+'</tbody></table></div>' +
-    '</div>';
+    '<table class="mon-table"><thead><tr><th>Name of the Office</th><th>Trees</th><th>Chart</th></tr></thead><tbody>'+officeBreakdown+'</tbody></table></div>';
+}
+
+// ── Report Type: Detailed Species Report — office-wise, categorically
+// assembled species breakdown (Office → Category → Species → Count) ──
+function buildSpeciesDetailReport(recs) {
+  var byOffice = {};
+  recs.forEach(function(r) {
+    var o = officeInfo(r);
+    if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, catSpecies:{} };
+    var b = byOffice[o.key];
+    var cat = speciesCategoryOf(r.cat);
+    if (!b.catSpecies[cat]) b.catSpecies[cat] = {};
+    b.catSpecies[cat][r.species] = (b.catSpecies[cat][r.species] || 0) + 1;
+  });
+  var officeKeys = Object.keys(byOffice).sort(compareOfficeKeys);
+  var sections = officeKeys.map(function(k){
+    var b = byOffice[k];
+    var officeTotal = 0;
+    var catBlocks = SPECIES_CATEGORY_LIST.filter(function(c){ return b.catSpecies[c]; }).map(function(c){
+      var speciesRows = Object.keys(b.catSpecies[c]).sort().map(function(sp){
+        officeTotal += b.catSpecies[c][sp];
+        return '<tr><td style="padding-left:24px">'+sp+'</td><td style="text-align:center">'+b.catSpecies[c][sp]+'</td></tr>';
+      }).join('');
+      var catTotal = Object.keys(b.catSpecies[c]).reduce(function(s,sp){ return s + b.catSpecies[c][sp]; }, 0);
+      return '<tr style="background:#eef7ee"><td><b>'+c+'</b></td><td style="text-align:center;font-weight:700">'+catTotal+'</td></tr>' + speciesRows;
+    }).join('');
+    return '<div style="margin-bottom:18px">' +
+      '<div style="font-size:13px;font-weight:700;color:#fff;background:#1a5c2a;padding:6px 10px;border-radius:6px;margin-bottom:4px">' + b.name + ' — Total Trees: ' + officeTotal + '</div>' +
+      '<table class="mon-table"><thead><tr><th>Species Category / Species</th><th style="width:90px">Count</th></tr></thead><tbody>' + catBlocks + '</tbody></table></div>';
+  }).join('') || '<div style="color:#aaa;text-align:center;padding:20px">No data</div>';
+
+  return '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:10px">Detailed Species Report — Office-wise Species Breakdown</div>' + sections;
+}
+
+// ── Report Type: Species Report — species with category & survival % ─
+function buildSpeciesSummaryReport(recs) {
+  var bySpecies = {};
+  recs.forEach(function(r){
+    if (!bySpecies[r.species]) bySpecies[r.species] = { species:r.species, cat:speciesCategoryOf(r.cat), total:0, alive:0 };
+    bySpecies[r.species].total++;
+    if (r.status === 'Alive') bySpecies[r.species].alive++;
+  });
+  var list = Object.keys(bySpecies).map(function(k){ return bySpecies[k]; })
+    .sort(function(a,b){ return b.total - a.total || a.species.localeCompare(b.species); });
+  var rows = list.map(function(s,i){
+    var survPct = s.total > 0 ? Math.round(s.alive/s.total*100) : 0;
+    var color = survPct >= 70 ? '#2e7d32' : (survPct >= 40 ? '#f57c00' : '#c62828');
+    return '<tr><td>'+(i+1)+'</td><td>'+s.species+'</td><td>'+s.cat+'</td><td style="text-align:center">'+s.total+'</td><td style="text-align:center">'+s.alive+'</td>' +
+      '<td style="text-align:center;font-weight:700;color:'+color+'">'+survPct+'%</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="color:#aaa;text-align:center;padding:20px">No data</td></tr>';
+
+  var grandTotal = recs.length;
+  var grandAlive = recs.filter(function(r){ return r.status==='Alive'; }).length;
+  var grandSurv = grandTotal > 0 ? Math.round(grandAlive/grandTotal*100) : 0;
+
+  return '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Species Report — Category &amp; Survival Rate</div>' +
+    '<div style="overflow-x:auto"><table class="mon-table" style="min-width:700px">' +
+    '<thead><tr><th>Sl.</th><th>Species</th><th>Category</th><th>Total Planted</th><th>Alive</th><th>Survival %</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '<tfoot><tr style="background:#e8f5e9;font-weight:700"><td colspan="3">Total</td><td style="text-align:center">'+grandTotal+'</td><td style="text-align:center">'+grandAlive+'</td><td style="text-align:center">'+grandSurv+'%</td></tr></tfoot>' +
+    '</table></div>';
 }
 
 // ── Report Type 2: Detailed record list — exact 1:1 record dump ─────
@@ -3266,6 +3325,50 @@ function buildDetailedReport(recs) {
   }).join('') || '<tr><td colspan="10" style="color:#aaa;text-align:center;padding:20px">No records match this filter</td></tr>';
   return '<div style="font-size:12px;color:#888;margin-bottom:8px">Showing all '+recs.length+' matching records</div>' +
     '<div style="overflow-x:auto"><table class="mon-table" id="detailed-rep-table" style="min-width:1000px"><thead><tr><th>ID</th><th>Date</th><th>Circle</th><th>District</th><th>Upazilla</th><th>Species</th><th>Status</th><th>Fund Source</th><th>Cost (BDT)</th><th>Care/Maintenance Activity</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+// ── Hierarchical office ordering: HQ, then each Circle (with its own
+// entry first), then that Circle's Districts (each with its own entry
+// first), then that District's Upazillas — before moving to the next
+// Circle. Used everywhere offices are listed in a report so the serial
+// number always follows the administrative hierarchy instead of A-Z.
+function districtToCircle(dis) {
+  for (var c in districtMap) { if (districtMap[c].indexOf(dis) !== -1) return c; }
+  return '';
+}
+function circleIndex(circle) {
+  for (var i=0;i<divData.length;i++) { if (divData[i].name === circle) return i; }
+  return 999;
+}
+function districtIndexInCircle(circle, dis) {
+  var idx = (districtMap[circle]||[]).indexOf(dis);
+  return idx === -1 ? 999 : idx;
+}
+function upazillaIndexInDistrict(dis, upa) {
+  var idx = (upazillaMap[dis]||[]).indexOf(upa);
+  return idx === -1 ? 999 : idx;
+}
+// Returns a comparable [circleRank, districtRank, subRank, upazillaRank]
+// tuple for an officeInfo().key value ('HQ' | 'C:x' | 'D:x' | 'U:x|y').
+function officeHierarchyRank(key) {
+  if (key === 'HQ') return [-1,-1,-1,-1];
+  if (key.indexOf('C:') === 0) {
+    return [circleIndex(key.slice(2)), -1, -1, -1];
+  }
+  if (key.indexOf('D:') === 0) {
+    var dis = key.slice(2), circle = districtToCircle(dis);
+    return [circleIndex(circle), districtIndexInCircle(circle, dis), -1, -1];
+  }
+  if (key.indexOf('U:') === 0) {
+    var parts = key.slice(2).split('|'), upa = parts[0], dis2 = parts[1], circle2 = districtToCircle(dis2);
+    return [circleIndex(circle2), districtIndexInCircle(circle2, dis2), 0, upazillaIndexInDistrict(dis2, upa)];
+  }
+  return [999,999,999,999];
+}
+function compareOfficeKeys(a, b) {
+  var ra = officeHierarchyRank(a), rb = officeHierarchyRank(b);
+  for (var i=0;i<ra.length;i++) { if (ra[i] !== rb[i]) return ra[i]-rb[i]; }
+  return 0;
 }
 
 // ── Fixed category lists used for Office Register aggregation ───────
@@ -3346,7 +3449,7 @@ function buildOfficeRegisterReport(recs) {
     if (act) b.activity[act] = (b.activity[act] || 0) + 1;
   });
 
-  var rows = Object.keys(byOffice).sort(function(a,b){ return byOffice[a].name.localeCompare(byOffice[b].name); }).map(function(k, i) {
+  var rows = Object.keys(byOffice).sort(compareOfficeKeys).map(function(k, i) {
     var b = byOffice[k];
     var catList = formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST);
     var sourceList = Object.keys(b.sources).join(', ');
@@ -3362,7 +3465,7 @@ function buildOfficeRegisterReport(recs) {
 
   return '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:8px">Office-wise Plantation Register</div>' +
     '<div style="overflow-x:auto"><table class="mon-table" id="office-reg-table" style="min-width:960px">' +
-    '<thead><tr><th>Sl.</th><th>Office / Institution Name</th><th>Tree Count</th><th>Species Category</th><th>Cost Source</th><th>Cost Amount</th><th>Care/Maintenance Activity Taken</th></tr></thead>' +
+    '<thead><tr><th>Sl.</th><th>Name of the Office</th><th>Tree Count</th><th>Species Category</th><th>Cost Source</th><th>Cost Amount</th><th>Care/Maintenance Activity Taken</th></tr></thead>' +
     '<tbody>' + rows + '</tbody>' +
     '<tfoot><tr style="background:#e8f5e9;font-weight:700"><td colspan="2">Total</td><td style="text-align:center">' + grandTrees + '</td><td></td><td></td><td style="text-align:right">' + fmtBDT(grandCost) + '</td><td></td></tr></tfoot>' +
     '</table></div>';
@@ -3422,8 +3525,8 @@ function exportReportCSV() {
       var act = careActivityOf(r.remarks);
       if (act) b.activity[act] = (b.activity[act]||0)+1;
     });
-    var officeKeysCsv = Object.keys(byOffice).sort(function(a,b){return byOffice[a].name.localeCompare(byOffice[b].name);});
-    headers = ['Sl','Office Name','Tree Count','Species Category','Cost Source','Cost Amount (BDT)','Care/Maintenance Activity'];
+    var officeKeysCsv = Object.keys(byOffice).sort(compareOfficeKeys);
+    headers = ['Sl','Name of the Office','Tree Count','Species Category','Cost Source','Cost Amount (BDT)','Care/Maintenance Activity'];
     rows = officeKeysCsv.map(function(k,i){
       var b = byOffice[k];
       return [i+1, b.name, b.count, formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST), Object.keys(b.sources).join('; '), Math.round(b.cost), formatCategoryCounts(b.activity, CARE_ACTIVITY_LIST)];
@@ -3455,6 +3558,39 @@ function exportReportCSV() {
       ['Survival Rate (%)', total>0?Math.round(alive/total*100):0],
       ['Total Cost (BDT)', Math.round(costSum(recs))],
     ];
+  } else if (LAST_REPORT.type === 'species_detail') {
+    var byOfficeSD = {};
+    recs.forEach(function(r) {
+      var o = officeInfo(r);
+      if (!byOfficeSD[o.key]) byOfficeSD[o.key] = { name:o.name, catSpecies:{} };
+      var b = byOfficeSD[o.key];
+      var cat = speciesCategoryOf(r.cat);
+      if (!b.catSpecies[cat]) b.catSpecies[cat] = {};
+      b.catSpecies[cat][r.species] = (b.catSpecies[cat][r.species]||0)+1;
+    });
+    headers = ['Name of the Office','Species Category','Species','Count'];
+    rows = [];
+    Object.keys(byOfficeSD).sort(compareOfficeKeys).forEach(function(k){
+      var b = byOfficeSD[k];
+      SPECIES_CATEGORY_LIST.filter(function(c){return b.catSpecies[c];}).forEach(function(c){
+        Object.keys(b.catSpecies[c]).sort().forEach(function(sp){
+          rows.push([b.name, c, sp, b.catSpecies[c][sp]]);
+        });
+      });
+    });
+  } else if (LAST_REPORT.type === 'species_summary') {
+    var bySpeciesCsv = {};
+    recs.forEach(function(r){
+      if (!bySpeciesCsv[r.species]) bySpeciesCsv[r.species] = { species:r.species, cat:speciesCategoryOf(r.cat), total:0, alive:0 };
+      bySpeciesCsv[r.species].total++;
+      if (r.status === 'Alive') bySpeciesCsv[r.species].alive++;
+    });
+    var listCsv = Object.keys(bySpeciesCsv).map(function(k){ return bySpeciesCsv[k]; })
+      .sort(function(a,b){ return b.total - a.total || a.species.localeCompare(b.species); });
+    headers = ['Sl','Species','Category','Total Planted','Alive','Survival %'];
+    rows = listCsv.map(function(s,i){
+      return [i+1, s.species, s.cat, s.total, s.alive, s.total>0?Math.round(s.alive/s.total*100):0];
+    });
   } else {
     headers = ['ID','Date','Circle','District','Upazilla','Species','Status','Fund Source','Cost (BDT)','Care/Maintenance Activity'];
     rows = recs.map(function(r){ return [r.id, r.date, r.div||'', r.dis||'', r.upa||'', r.species, r.status, r.fund||'', Math.round(parseFloat(r.cost)||0), r.remarks||'']; });
@@ -3608,10 +3744,11 @@ async function exportReportPDF(btnEl) {
       doc.setFont(FONT,'normal');
     });
     var byOffice = {};
-    recs.forEach(function(r){ var o=officeInfo(r); byOffice[o.name]=(byOffice[o.name]||0)+1; });
+    recs.forEach(function(r){ var o=officeInfo(r); if(!byOffice[o.key]) byOffice[o.key]={name:o.name,count:0}; byOffice[o.key].count++; });
+    var officeKeysSumPdf = Object.keys(byOffice).sort(compareOfficeKeys);
     doc.autoTable({
       startY: startY+64, margin:{left:margin,right:margin},
-      head:[['Office','Trees']], body:Object.keys(byOffice).sort().map(function(k){ return [txt(k),String(byOffice[k])]; }),
+      head:[['Name of the Office','Trees']], body:officeKeysSumPdf.map(function(k){ return [txt(byOffice[k].name),String(byOffice[k].count)]; }),
       headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:9},tableFontStyles),
       bodyStyles:Object.assign({fontSize:8.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
     });
@@ -3626,7 +3763,7 @@ async function exportReportPDF(btnEl) {
       var act = careActivityOf(r.remarks);
       if (act) b.activity[act] = (b.activity[act]||0)+1;
     });
-    var officeKeys = Object.keys(byOffice2).sort(function(a,b){return byOffice2[a].name.localeCompare(byOffice2[b].name);});
+    var officeKeys = Object.keys(byOffice2).sort(compareOfficeKeys);
     var body = officeKeys.map(function(k,i){
       var b = byOffice2[k];
       return [String(i+1), txt(b.name), String(b.count), txt(formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST)), txt(Object.keys(b.sources).join(', ')), fmtBDT(b.cost), txt(formatCategoryCounts(b.activity, CARE_ACTIVITY_LIST))];
@@ -3635,7 +3772,7 @@ async function exportReportPDF(btnEl) {
     var grandCost = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].cost; }, 0);
     doc.autoTable({
       startY:startY, margin:{left:margin,right:margin},
-      head:[['Sl','Office Name','Trees','Species Category','Cost Source','Cost (BDT)','Care/Maintenance Activity']],
+      head:[['Sl','Name of the Office','Trees','Species Category','Cost Source','Cost (BDT)','Care/Maintenance Activity']],
       body:body,
       foot:[['', 'Total', String(grandTrees), '', '', fmtBDT(grandCost), '']],
       headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:8},tableFontStyles),
@@ -3659,6 +3796,52 @@ async function exportReportPDF(btnEl) {
     doc.autoTable({
       startY:startY, margin:{left:margin,right:margin},
       head:[['Month','Trees Planted','Cost (BDT)']], body:body2,
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:9},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:8.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+    });
+
+  } else if (LAST_REPORT.type === 'species_detail') {
+    var byOfficeSDp = {};
+    recs.forEach(function(r) {
+      var o = officeInfo(r);
+      if (!byOfficeSDp[o.key]) byOfficeSDp[o.key] = { name:o.name, catSpecies:{} };
+      var b = byOfficeSDp[o.key];
+      var cat = speciesCategoryOf(r.cat);
+      if (!b.catSpecies[cat]) b.catSpecies[cat] = {};
+      b.catSpecies[cat][r.species] = (b.catSpecies[cat][r.species]||0)+1;
+    });
+    var bodySD = [];
+    Object.keys(byOfficeSDp).sort(compareOfficeKeys).forEach(function(k){
+      var b = byOfficeSDp[k];
+      SPECIES_CATEGORY_LIST.filter(function(c){return b.catSpecies[c];}).forEach(function(c){
+        Object.keys(b.catSpecies[c]).sort().forEach(function(sp){
+          bodySD.push([txt(b.name), c, txt(sp), String(b.catSpecies[c][sp])]);
+        });
+      });
+    });
+    doc.autoTable({
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Name of the Office','Species Category','Species','Count']], body:bodySD,
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:8},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:7.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+    });
+
+  } else if (LAST_REPORT.type === 'species_summary') {
+    var bySpeciesPdf = {};
+    recs.forEach(function(r){
+      if (!bySpeciesPdf[r.species]) bySpeciesPdf[r.species] = { species:r.species, cat:speciesCategoryOf(r.cat), total:0, alive:0 };
+      bySpeciesPdf[r.species].total++;
+      if (r.status === 'Alive') bySpeciesPdf[r.species].alive++;
+    });
+    var listPdf = Object.keys(bySpeciesPdf).map(function(k){ return bySpeciesPdf[k]; })
+      .sort(function(a,b){ return b.total - a.total || a.species.localeCompare(b.species); });
+    var bodySS = listPdf.map(function(s,i){
+      var pct = s.total>0?Math.round(s.alive/s.total*100):0;
+      return [String(i+1), txt(s.species), s.cat, String(s.total), String(s.alive), pct+'%'];
+    });
+    doc.autoTable({
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Sl','Species','Category','Total Planted','Alive','Survival %']], body:bodySS,
       headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:9},tableFontStyles),
       bodyStyles:Object.assign({fontSize:8.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
     });
