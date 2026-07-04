@@ -663,8 +663,16 @@ tr:hover td{background:#f8fdf8}
         </select>
       </div>
       <div class="fg full">
-        <label>Remarks / Notes <span style="font-weight:400;color:#2d8a42">| মন্তব্য</span></label>
-        <textarea id="f-remarks" placeholder="Any additional notes about this plantation..."></textarea>
+        <label>Care/Maintenance Activity <span style="font-weight:400;color:#2d8a42">| যত্ন/রক্ষণাবেক্ষণ কার্যক্রম</span></label>
+        <select id="f-activity-type" onchange="onActivityTypeChange()">
+          <option value="">— Select Activity | কার্যক্রম নির্বাচন করুন —</option>
+          <option value="Office Management">Office Management</option>
+          <option value="Fencing">Fencing</option>
+          <option value="By Caregiver">By Caregiver</option>
+          <option value="Others">Others</option>
+        </select>
+        <textarea id="f-activity-specify" placeholder="Please specify... | বিস্তারিত লিখুন..." style="display:none;margin-top:8px" oninput="syncActivityRemarks()"></textarea>
+        <input type="hidden" id="f-remarks" value="">
       </div>
     </div>
   </div>
@@ -1549,7 +1557,7 @@ var FIELD_SCHEMA = [
       {key:'funding_source',  label:'Funding Source | অর্থায়নের উৎস',           el:'f-fund',             wrapper:'fg', type:'field'},
       {key:'cost_bdt',        label:'Cost in BDT | খরচ (টাকা)',                 el:'f-cost',             wrapper:'fg', type:'field'},
       {key:'initial_status',  label:'Initial Status | প্রাথমিক অবস্থা',          el:'f-status',           wrapper:'fg', type:'field'},
-      {key:'remarks',         label:'Remarks / Notes | মন্তব্য',                 el:'f-remarks',          wrapper:'fg', type:'field'},
+      {key:'remarks',         label:'Care/Maintenance Activity | যত্ন/রক্ষণাবেক্ষণ কার্যক্রম', el:'f-remarks',          wrapper:'fg', type:'field'},
       {key:'photo_upload',    label:'Photo Upload | ছবি আপলোড',                 el:'upload-drop-zone',   wrapper:'card', type:'field', legacy:'photo'},
   ]},
   { key:'monitoring', legacy:'monitoring', label:'🔍 Monitoring | পর্যবেক্ষণ', fields:[
@@ -2084,12 +2092,58 @@ function updateUpazilla() {
 // NOTE: saveRecord() is defined once, later in this file (see "function saveRecord"
 // further down), where it has the full edit/new + permission + Google Sheets sync logic.
 
+// ── Care/Maintenance Activity dropdown ───────────────────────────────
+// Keeps the visible dropdown ("Office Management" / "Fencing" / "By
+// Caregiver" / "Others" + specify) in sync with the hidden #f-remarks
+// input that the rest of the app (save/edit/sync) already reads from —
+// so no backend/Apps Script change is needed, the record's "remarks"
+// field just now holds a controlled value instead of free text.
+function syncActivityRemarks() {
+  var type = document.getElementById('f-activity-type').value;
+  var specify = (document.getElementById('f-activity-specify').value || '').trim();
+  var combined = type === 'Others' ? ('Others' + (specify ? ': ' + specify : '')) : type;
+  document.getElementById('f-remarks').value = combined;
+}
+function onActivityTypeChange() {
+  var type = document.getElementById('f-activity-type').value;
+  var specifyEl = document.getElementById('f-activity-specify');
+  if (specifyEl) specifyEl.style.display = (type === 'Others') ? 'block' : 'none';
+  syncActivityRemarks();
+}
+// Reverse-parses a stored remarks value (e.g. "Fencing" or "Others: bamboo
+// fence built") back into the dropdown + specify field, used when editing
+// an existing record. Legacy free-text remarks (from before this feature)
+// fall back to "Others" with the original text preserved in specify.
+function populateActivityFromRemarks(remarks) {
+  var typeSel = document.getElementById('f-activity-type');
+  var specifyEl = document.getElementById('f-activity-specify');
+  if (!typeSel || !specifyEl) return;
+  var v = (remarks || '').trim();
+  var type = '', specify = '';
+  if (v === 'Office Management' || v === 'Fencing' || v === 'By Caregiver') {
+    type = v;
+  } else if (v.indexOf('Others') === 0) {
+    type = 'Others';
+    specify = v.replace(/^Others:\s*/, '').replace(/^Others$/, '');
+  } else if (v) {
+    // Legacy free-text remarks from before this feature existed
+    type = 'Others';
+    specify = v;
+  }
+  typeSel.value = type;
+  specifyEl.value = specify;
+  specifyEl.style.display = (type === 'Others') ? 'block' : 'none';
+  document.getElementById('f-remarks').value = v;
+}
+
 function clearForm() {
   var ip = document.getElementById('inline-mon-panel'); if(ip) ip.style.display='none';
   ['f-div','f-dis','f-upa','f-site','f-caregiver','f-caregiver-phone','f-remarks','f-date'].forEach(id => {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
+  var actType = document.getElementById('f-activity-type'); if (actType) actType.value = '';
+  var actSpecify = document.getElementById('f-activity-specify'); if (actSpecify) { actSpecify.value = ''; actSpecify.style.display = 'none'; }
   document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
   var speciesSel = document.getElementById('f-species-sel');
   if (speciesSel) speciesSel.selectedIndex = 0;
@@ -2197,7 +2251,7 @@ function viewRecord(id) {
       '<div><span style="color:#888">Cost | খরচ</span><br><b>৳ ' + (r.cost || 0).toLocaleString() + '</b></div>' +
       '<div><span style="color:#888">Status | অবস্থা</span><br><span class="status-pill ' + statusClass(r.status) + '">' + statusLabel(r.status) + '</span></div>' +
       '<div><span style="color:#888">GPS</span><br><b>' + (r.lat || 'N/A') + ', ' + (r.lon || 'N/A') + '</b></div>' +
-      '<div style="grid-column:1/-1"><span style="color:#888">Remarks | মন্তব্য</span><br>' + (r.remarks || 'None') + '</div>' +
+      '<div style="grid-column:1/-1"><span style="color:#888">Care/Maintenance Activity | কার্যক্রম</span><br>' + (r.remarks || 'None') + '</div>' +
     '</div>' +
     '<div style="font-size:13px;font-weight:700;color:#1a5c2a;margin-bottom:6px">🔍 Monitoring Visits | পরিদর্শন ইতিহাস</div>' +
     mon;
@@ -2632,7 +2686,7 @@ function editRecord(id) {
     document.getElementById('f-caregiver-phone').value = r.caregiverPhone||'';
     document.getElementById('f-cost').value = (r.cost || r.cost===0) ? r.cost : '';
     var fundSel=document.getElementById('f-fund'); if(fundSel && r.fund){ for(var fi=0;fi<fundSel.options.length;fi++){ if(fundSel.options[fi].value===r.fund || fundSel.options[fi].text===r.fund){ fundSel.selectedIndex=fi; break; } } }
-    document.getElementById('f-remarks').value = r.remarks||'';
+    populateActivityFromRemarks(r.remarks||'');
     var st=document.getElementById('f-status'); for(var i=0;i<st.options.length;i++){if(st.options[i].value===r.status){st.selectedIndex=i;break;}}
     // Mark as editing
     document.getElementById('save-record-btn').textContent='💾 Update Record — আপডেট করুন';
@@ -3211,7 +3265,38 @@ function buildDetailedReport(recs) {
       '<td style="max-width:220px">'+(r.remarks||'—')+'</td></tr>';
   }).join('') || '<tr><td colspan="10" style="color:#aaa;text-align:center;padding:20px">No records match this filter</td></tr>';
   return '<div style="font-size:12px;color:#888;margin-bottom:8px">Showing all '+recs.length+' matching records</div>' +
-    '<div style="overflow-x:auto"><table class="mon-table" id="detailed-rep-table" style="min-width:1000px"><thead><tr><th>ID</th><th>Date</th><th>Circle</th><th>District</th><th>Upazilla</th><th>Species</th><th>Status</th><th>Fund Source</th><th>Cost (BDT)</th><th>Remarks</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    '<div style="overflow-x:auto"><table class="mon-table" id="detailed-rep-table" style="min-width:1000px"><thead><tr><th>ID</th><th>Date</th><th>Circle</th><th>District</th><th>Upazilla</th><th>Species</th><th>Status</th><th>Fund Source</th><th>Cost (BDT)</th><th>Care/Maintenance Activity</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+// ── Fixed category lists used for Office Register aggregation ───────
+// Species Category comes from the Tree Species dropdown (auto-filled).
+// Care/Maintenance Activity comes from the Care/Maintenance Activity
+// dropdown on the Add Tree Record form (stored in r.remarks).
+var SPECIES_CATEGORY_LIST = ['Fruit tree','Timber tree','Medicinal','Ornamental','Others'];
+var CARE_ACTIVITY_LIST = ['Office Management','Fencing','By Caregiver','Others'];
+
+function speciesCategoryOf(cat) {
+  var v = (cat || '').trim();
+  return SPECIES_CATEGORY_LIST.indexOf(v) !== -1 ? v : 'Others';
+}
+
+// Returns one of CARE_ACTIVITY_LIST, or null if nothing was recorded.
+// "Others" selections are stored as "Others" or "Others: <details>" — the
+// free-text details are intentionally dropped here so the Office Register
+// only ever shows these 4 fixed labels (individual details still show up
+// in the Detailed Record Report).
+function careActivityOf(remarks) {
+  var v = (remarks || '').trim();
+  if (!v) return null;
+  if (v === 'Office Management' || v === 'Fencing' || v === 'By Caregiver') return v;
+  return 'Others';
+}
+
+// Formats a {label:count} map as "Label: n, Label: n" using a fixed order,
+// skipping labels with zero occurrences.
+function formatCategoryCounts(countsObj, orderedList, emptyText) {
+  var parts = orderedList.filter(function(c){ return countsObj[c]; }).map(function(c){ return c + ': ' + countsObj[c]; });
+  return parts.length ? parts.join(', ') : (emptyText || '—');
 }
 
 // ── Office identity — which office/institution "owns" a record ──────
@@ -3251,20 +3336,21 @@ function buildOfficeRegisterReport(recs) {
   var byOffice = {};
   recs.forEach(function(r) {
     var o = officeInfo(r);
-    if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, remarks:[] };
+    if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, activity:{} };
     var b = byOffice[o.key];
     b.count++;
-    b.cats[r.cat || 'Others'] = true;
+    b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)] || 0) + 1;
     b.sources[r.fund || '—'] = true;
     b.cost += (parseFloat(r.cost) || 0);
-    if (r.remarks && b.remarks.indexOf(r.remarks) === -1) b.remarks.push(r.remarks);
+    var act = careActivityOf(r.remarks);
+    if (act) b.activity[act] = (b.activity[act] || 0) + 1;
   });
 
   var rows = Object.keys(byOffice).sort(function(a,b){ return byOffice[a].name.localeCompare(byOffice[b].name); }).map(function(k, i) {
     var b = byOffice[k];
-    var catList = Object.keys(b.cats).sort().join(', ');
+    var catList = formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST);
     var sourceList = Object.keys(b.sources).join(', ');
-    var activity = b.remarks.length ? b.remarks.join(' | ') : 'No remarks recorded for this office';
+    var activity = formatCategoryCounts(b.activity, CARE_ACTIVITY_LIST, 'No activity recorded for this office');
     return '<tr><td>' + (i+1) + '</td><td><b>' + b.name + '</b></td><td style="text-align:center">' + b.count + '</td>' +
       '<td>' + catList + '</td><td>' + sourceList + '</td>' +
       '<td style="text-align:right;color:#6a1b9a;font-weight:600">' + fmtBDT(b.cost) + '</td>' +
@@ -3330,16 +3416,17 @@ function exportReportCSV() {
     var byOffice = {};
     recs.forEach(function(r) {
       var o = officeInfo(r);
-      if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, remarks:[] };
+      if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, activity:{} };
       var b = byOffice[o.key];
-      b.count++; b.cats[r.cat||'Others']=true; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
-      if (r.remarks && b.remarks.indexOf(r.remarks)===-1) b.remarks.push(r.remarks);
+      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      var act = careActivityOf(r.remarks);
+      if (act) b.activity[act] = (b.activity[act]||0)+1;
     });
     var officeKeysCsv = Object.keys(byOffice).sort(function(a,b){return byOffice[a].name.localeCompare(byOffice[b].name);});
     headers = ['Sl','Office Name','Tree Count','Species Category','Cost Source','Cost Amount (BDT)','Care/Maintenance Activity'];
     rows = officeKeysCsv.map(function(k,i){
       var b = byOffice[k];
-      return [i+1, b.name, b.count, Object.keys(b.cats).sort().join('; '), Object.keys(b.sources).join('; '), Math.round(b.cost), b.remarks.join(' | ')||'—'];
+      return [i+1, b.name, b.count, formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST), Object.keys(b.sources).join('; '), Math.round(b.cost), formatCategoryCounts(b.activity, CARE_ACTIVITY_LIST)];
     });
     var csvGrandTrees = officeKeysCsv.reduce(function(sum,k){ return sum + byOffice[k].count; }, 0);
     var csvGrandCost = officeKeysCsv.reduce(function(sum,k){ return sum + byOffice[k].cost; }, 0);
@@ -3369,7 +3456,7 @@ function exportReportCSV() {
       ['Total Cost (BDT)', Math.round(costSum(recs))],
     ];
   } else {
-    headers = ['ID','Date','Circle','District','Upazilla','Species','Status','Fund Source','Cost (BDT)','Remarks'];
+    headers = ['ID','Date','Circle','District','Upazilla','Species','Status','Fund Source','Cost (BDT)','Care/Maintenance Activity'];
     rows = recs.map(function(r){ return [r.id, r.date, r.div||'', r.dis||'', r.upa||'', r.species, r.status, r.fund||'', Math.round(parseFloat(r.cost)||0), r.remarks||'']; });
   }
 
@@ -3533,15 +3620,16 @@ async function exportReportPDF(btnEl) {
     var byOffice2 = {};
     recs.forEach(function(r) {
       var o = officeInfo(r);
-      if (!byOffice2[o.key]) byOffice2[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, remarks:[] };
+      if (!byOffice2[o.key]) byOffice2[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, activity:{} };
       var b = byOffice2[o.key];
-      b.count++; b.cats[r.cat||'Others']=true; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
-      if (r.remarks && b.remarks.indexOf(r.remarks)===-1) b.remarks.push(r.remarks);
+      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      var act = careActivityOf(r.remarks);
+      if (act) b.activity[act] = (b.activity[act]||0)+1;
     });
     var officeKeys = Object.keys(byOffice2).sort(function(a,b){return byOffice2[a].name.localeCompare(byOffice2[b].name);});
     var body = officeKeys.map(function(k,i){
       var b = byOffice2[k];
-      return [String(i+1), txt(b.name), String(b.count), txt(Object.keys(b.cats).sort().join(', ')), txt(Object.keys(b.sources).join(', ')), fmtBDT(b.cost), txt(b.remarks.join(' | ')||'—')];
+      return [String(i+1), txt(b.name), String(b.count), txt(formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST)), txt(Object.keys(b.sources).join(', ')), fmtBDT(b.cost), txt(formatCategoryCounts(b.activity, CARE_ACTIVITY_LIST))];
     });
     var grandTrees = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].count; }, 0);
     var grandCost = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].cost; }, 0);
@@ -4225,6 +4313,8 @@ function clearForm() {
   ['f-div','f-dis','f-upa','f-site','f-lat','f-lon','f-date','f-caregiver','f-caregiver-phone','f-remarks','f-cost'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
+  var actType = document.getElementById('f-activity-type'); if (actType) actType.value = '';
+  var actSpecify = document.getElementById('f-activity-specify'); if (actSpecify) { actSpecify.value = ''; actSpecify.style.display = 'none'; }
   if (document.getElementById('f-level')) { populateLevelOptions(); }
   var fsSel=document.getElementById('f-species-sel'); if(fsSel) fsSel.value='';
   var fsFin=document.getElementById('f-species-final'); if(fsFin) fsFin.value='';
@@ -4241,6 +4331,7 @@ function clearForm() {
 // saveRecord — handles both "new record" and "edit record" modes,
 // enforces add permission, and syncs to Google Sheets via apiCall().
 function saveRecord() {
+  if (typeof syncActivityRemarks === 'function') syncActivityRemarks();
   if (!hasPerm('add')) { alert('আপনার নতুন রেকর্ড যোগ করার অনুমতি নেই।'); return; }
   var btn = document.getElementById('save-record-btn');
   // Records (with all their photos) are stored as one JSON cell in Google Sheets,
@@ -5589,7 +5680,7 @@ var _origExportCSV = exportCSV;
 function exportCSV() {
   if (!hasPerm('export')) { alert('আপনার এই কাজ করার অনুমতি নেই।'); return; }
   var rows = scopedRecords();
-  var header = ['ID','Date','Planting Level','Circle','District','Upazilla / Pourashava','Site','Species','Category','Status','Lat','Lon','Caregiver','Caregiver Phone','Fund','Cost (BDT)','Remarks','Visit Count'];
+  var header = ['ID','Date','Planting Level','Circle','District','Upazilla / Pourashava','Site','Species','Category','Status','Lat','Lon','Caregiver','Caregiver Phone','Fund','Cost (BDT)','Care/Maintenance Activity','Visit Count'];
   var csv = header.join(',') + '\n' + rows.map(function(r){
     return [r.id,r.date,recLevel(r),r.div||'',r.dis||'',r.upa||'','"'+(r.site||'').replace(/"/g,'""')+'"',
       '"'+r.species+'"',r.cat,r.status,r.lat||'',r.lon||'',
