@@ -1234,7 +1234,7 @@ var currentMonEditIndex = null; // null = new visit, number = edit existing
 // 👇 Deploy the included Code.gs as a Web App (Execute as: Me, Who has access: Anyone)
 //    and paste the deployment URL below. Full steps: SETUP_GUIDE.md
 // Example: 'https://script.google.com/macros/s/AKfycb.../exec'
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzIec9HCPWpMRUHIwjDx7ahh2LrJazAKbxcSpSB1n2tn6MAjtM32ffPohhiAhiCBO_0mg/exec'; // ⚠️ EMPTY = local test mode (no Google Sheets/Drive sync, no real login)
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyhG63wUB7jhsa9gombQJMlYLTDTcUGyX24RQRbExdy0eKbcg_0zG705Q0f1KkM9NbObA/exec'; // ⚠️ EMPTY = local test mode (no Google Sheets/Drive sync, no real login)
 // ════════════════════════════════════════════════════════
 // API HELPERS
 // ════════════════════════════════════════════════════════
@@ -3215,12 +3215,34 @@ function buildDetailedReport(recs) {
 }
 
 // ── Office identity — which office/institution "owns" a record ──────
+// Prefers the actual "Office" name entered in User Management (matched by
+// role + location) so reports show real office names instead of generic
+// auto-built labels. Falls back to the generic label if no user matches.
 function officeInfo(r) {
   var lvl = recLevel(r);
-  if (lvl === 'hq')       return { key:'HQ', name:'Head Office (DPHE HQ)' };
-  if (lvl === 'circle')   return { key:'C:'+r.div, name:'Circle Office, ' + (r.div||'—') };
-  if (lvl === 'district') return { key:'D:'+r.dis, name:'District Office, ' + (r.dis||'—') };
-  return { key:'U:'+r.upa+'|'+r.dis, name:'Upazila Office, ' + (r.upa||'—') + ', ' + (r.dis||'—') };
+  var key, fallbackName;
+  if (lvl === 'hq') {
+    key = 'HQ'; fallbackName = 'Head Office (DPHE HQ)';
+  } else if (lvl === 'circle') {
+    key = 'C:'+r.div; fallbackName = 'Circle Office, ' + (r.div||'—');
+  } else if (lvl === 'district') {
+    key = 'D:'+r.dis; fallbackName = 'District Office, ' + (r.dis||'—');
+  } else {
+    key = 'U:'+r.upa+'|'+r.dis; fallbackName = 'Upazila Office, ' + (r.upa||'—') + ', ' + (r.dis||'—');
+  }
+
+  var matchedUser = null;
+  if (typeof users !== 'undefined' && users && users.length) {
+    matchedUser = users.filter(function(u) {
+      if (lvl === 'hq')       return u.role === 'HQ Admin';
+      if (lvl === 'circle')   return u.role === 'Divisional' && u.div === r.div;
+      if (lvl === 'district') return u.role === 'District'   && u.div === r.div && u.dis === r.dis;
+      return u.role === 'Upazilla' && u.div === r.div && u.dis === r.dis && u.upa === r.upa;
+    })[0];
+  }
+
+  var name = (matchedUser && matchedUser.office) ? matchedUser.office : fallbackName;
+  return { key:key, name:name };
 }
 
 // ── Report Type 3: Office Register Report (matches the paper format) ─
