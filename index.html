@@ -978,7 +978,7 @@ tr:hover td{background:#f8fdf8}
           <option value="office">Office Register Report</option>
           <option value="trend">Monthly Trend Report</option>
           <option value="species_detail">Detailed Species Report</option>
-          <option value="species_summary">Species Report</option>
+          <option value="species_summary">Species Report — Category &amp; Survival Rate</option>
         </select>
       </div>
       <div class="fg"><label>From Date</label><input type="date" id="rep-from"></div>
@@ -3083,7 +3083,7 @@ var LAST_REPORT = { type: '', recs: [], from: '', to: '', scopeLabel: '' };
 function reportTypeLabel(t) {
   return { summary:'Summary Report', detailed:'Detailed Record Report',
     office:'Office Register Report', trend:'Monthly Trend Report',
-    species_detail:'Detailed Species Report', species_summary:'Species Report' }[t] || 'Report';
+    species_detail:'Detailed Species Report', species_summary:'Species Report — Category & Survival Rate' }[t] || 'Report';
 }
 
 // ── Scope selector UI — built according to the logged-in role ───────
@@ -3810,20 +3810,49 @@ async function exportReportPDF(btnEl) {
       if (!b.catSpecies[cat]) b.catSpecies[cat] = {};
       b.catSpecies[cat][r.species] = (b.catSpecies[cat][r.species]||0)+1;
     });
-    var bodySD = [];
-    Object.keys(byOfficeSDp).sort(compareOfficeKeys).forEach(function(k){
+    var officeKeysSD = Object.keys(byOfficeSDp).sort(compareOfficeKeys);
+    var pageH = doc.internal.pageSize.getHeight();
+    var cursorY = startY;
+    if (!officeKeysSD.length) {
+      doc.setFontSize(10); doc.setTextColor(150,150,150); doc.setFont(FONT,'normal');
+      doc.text('No data', margin, cursorY+10);
+    }
+    officeKeysSD.forEach(function(k){
       var b = byOfficeSDp[k];
-      SPECIES_CATEGORY_LIST.filter(function(c){return b.catSpecies[c];}).forEach(function(c){
+      var officeTotal = 0;
+      var body = [];
+      var catRowIdx = {};
+      SPECIES_CATEGORY_LIST.filter(function(c){ return b.catSpecies[c]; }).forEach(function(c){
+        var catTotal = Object.keys(b.catSpecies[c]).reduce(function(s,sp){ return s + b.catSpecies[c][sp]; }, 0);
+        officeTotal += catTotal;
+        catRowIdx[body.length] = true;
+        body.push([txt(c), String(catTotal)]);
         Object.keys(b.catSpecies[c]).sort().forEach(function(sp){
-          bodySD.push([txt(b.name), c, txt(sp), String(b.catSpecies[c][sp])]);
+          body.push(['     ' + txt(sp), String(b.catSpecies[c][sp])]);
         });
       });
-    });
-    doc.autoTable({
-      startY:startY, margin:{left:margin,right:margin},
-      head:[['Name of the Office','Species Category','Species','Count']], body:bodySD,
-      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:8},tableFontStyles),
-      bodyStyles:Object.assign({fontSize:7.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+      // Office title bar — page-break first if it won't fit
+      if (cursorY + 44 > pageH - margin) { doc.addPage(); cursorY = margin; }
+      doc.setFillColor(26,92,42);
+      doc.rect(margin, cursorY, pageW - margin*2, 20, 'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(9.5); doc.setFont(FONT,'bold');
+      doc.text(txt(b.name) + ' — Total Trees: ' + officeTotal, margin+8, cursorY+14, {maxWidth: pageW-margin*2-16});
+      doc.setFont(FONT,'normal');
+      cursorY += 24;
+      doc.autoTable({
+        startY: cursorY, margin:{left:margin,right:margin},
+        head:[['Species Category / Species','Count']], body:body,
+        headStyles:Object.assign({fillColor:[200,225,200],textColor:[26,92,42],fontSize:8},tableFontStyles),
+        bodyStyles:Object.assign({fontSize:7.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+        columnStyles:{1:{cellWidth:70,halign:'center'}},
+        didParseCell: function(data){
+          if (data.section === 'body' && catRowIdx[data.row.index]) {
+            data.cell.styles.fillColor = [232,245,233];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      });
+      cursorY = doc.lastAutoTable.finalY + 16;
     });
 
   } else if (LAST_REPORT.type === 'species_summary') {
