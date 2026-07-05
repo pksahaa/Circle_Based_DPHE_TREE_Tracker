@@ -318,6 +318,45 @@ tr:hover td{background:#f8fdf8}
 .mon-status-sel.care{border-color:#f57c00;background:#fff8e1;color:#e65100}
 .mon-status-sel.pending{border-color:#aaa;background:#f5f5f5;color:#888}
 .mon-locked{display:inline-flex;align-items:center;justify-content:center;width:32px;height:28px;background:#f5f5f5;border-radius:6px;border:1.5px solid #ddd;color:#bbb;font-size:14px}
+
+/* ── PDF EXPORT MODE ──────────────────────────────────────────────────
+   On screen, report tables use min-width + overflow-x:auto so wide
+   tables (7-10 columns) scroll horizontally instead of squeezing.
+   That's fine for browsing but it's exactly what breaks html2pdf.js:
+   html2canvas rasterizes at the table's scrollable min-width, so on an
+   A4 page the content either gets clipped on the right or shrunk to
+   near-unreadable size. This class is added to #report-content only
+   for the moment of PDF capture (see exportReportPDF) and forces every
+   report table back to a page-width, wrapping, non-scrolling layout —
+   plus row/​header page-break rules so rows never get sliced in half
+   and column headers repeat on every page. */
+#report-content.pdf-export-mode .mon-table-wrap,
+#report-content.pdf-export-mode div[style*="overflow-x:auto"]{
+  overflow: visible !important;
+}
+#report-content.pdf-export-mode table.mon-table,
+#report-content.pdf-export-mode table.compare-table{
+  min-width: 0 !important;
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+#report-content.pdf-export-mode table.mon-table th,
+#report-content.pdf-export-mode table.mon-table td,
+#report-content.pdf-export-mode table.compare-table th,
+#report-content.pdf-export-mode table.compare-table td{
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  font-size: 10.5px !important;
+  padding: 6px 5px !important;
+}
+#report-content.pdf-export-mode table thead{
+  display: table-header-group; /* repeat header row on every PDF page */
+}
+#report-content.pdf-export-mode table tr{
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
 .mon-photo-btn{padding:3px 8px;font-size:10px;border:1.5px solid #1976d2;background:#e3f2fd;color:#1565c0;border-radius:5px;cursor:pointer;white-space:nowrap}
 .mon-gps-badge{font-size:10px;color:#1976d2;background:#e3f2fd;padding:2px 6px;border-radius:4px;display:inline-block;margin-top:2px}
 .mon-id-cell{font-size:12px;font-weight:700;color:#1a5c2a}
@@ -3710,6 +3749,18 @@ async function exportReportPDF(btnEl) {
   var noPrintEls = target.querySelectorAll('.no-print');
   noPrintEls.forEach(function(el){ el.style.visibility = 'hidden'; });
 
+  // Wide reports (Office Register, Detailed Record, Species Report — 7 to
+  // 10 columns) render far more legibly in landscape; the compact ones
+  // (Summary, Trend, Detailed Species) are fine in portrait.
+  var wideReportTypes = { office: true, detailed: true, species_summary: true };
+  var orientation = wideReportTypes[LAST_REPORT.type] ? 'landscape' : 'portrait';
+
+  // Switch every table in the report from its on-screen scrollable,
+  // fixed-min-width layout into a page-width, wrapping layout — see the
+  // .pdf-export-mode CSS block for why this is the actual fix for
+  // html2pdf.js cutting off or shrinking wide tables.
+  target.classList.add('pdf-export-mode');
+
   var filename = 'dphe_' + LAST_REPORT.type + '_report_' + new Date().toISOString().split('T')[0] + '.pdf';
 
   try {
@@ -3717,13 +3768,21 @@ async function exportReportPDF(btnEl) {
       margin: 24,
       filename: filename,
       image: { type: 'jpeg', quality: 0.97 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: target.scrollWidth,   // capture full content width, not just what's visible after the class change
+        scrollX: 0,
+        scrollY: 0
+      },
+      jsPDF: { unit: 'pt', format: 'a4', orientation: orientation },
       pagebreak: { mode: ['css', 'avoid-all'] }
     }).from(target).save();
   } catch (err) {
     alert('⚠️ PDF তৈরি করতে সমস্যা হয়েছে / Failed to create PDF: ' + (err && err.message || err));
   } finally {
+    target.classList.remove('pdf-export-mode');
     noPrintEls.forEach(function(el){ el.style.visibility = ''; });
     if (btnEl) { btnEl.innerHTML = origBtnText; btnEl.disabled = false; }
   }
