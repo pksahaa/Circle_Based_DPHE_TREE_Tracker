@@ -8,7 +8,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,sans-serif;background:#f0f4f0;color:#1a1a1a;min-height:100vh;font-size:14px}
@@ -1140,13 +1139,32 @@ tr:hover td{background:#f8fdf8}
   <!-- Backup & Restore (HQ Admin only) -->
   <div class="card" id="backup-restore-card" style="display:none">
     <div class="card-title"><span>☁️</span> Backup &amp; Restore | ব্যাকআপ ও পুনরুদ্ধার</div>
-    <p style="font-size:12px;color:#666;margin-bottom:14px;line-height:1.6">
-      সম্পূর্ণ ডেটা (Users, Records, Species) ব্যাকআপ নিন — সরাসরি আপনার ডিভাইসে ডাউনলোড করুন অথবা ইমেইলে পাঠান।
-      নতুন ব্যাকআপ ইমেইল পাঠানো হলে আগের ব্যাকআপ ইমেইল স্বয়ংক্রিয়ভাবে মুছে যায়, যাতে ইনবক্সে সবসময় শুধু সর্বশেষ ব্যাকআপটিই থাকে।
+    <p style="font-size:12px;color:#666;margin-bottom:12px;line-height:1.6">
+      সম্পূর্ণ ডেটা (Users, Records, Species) ব্যাকআপ নিন — সরাসরি ডিভাইসে ডাউনলোড করুন, যেকোনো সময় ইমেইলে পাঠান, অথবা প্রতি ১০ দিনে স্বয়ংক্রিয়ভাবে ইমেইলে পাঠানো চালু করুন।
+      নতুন ব্যাকআপ ইমেইল গেলে আগেরটা স্বয়ংক্রিয়ভাবে মুছে যায়, যাতে ইনবক্সে সবসময় শুধু সর্বশেষ ব্যাকআপটিই থাকে।
     </p>
+
+    <div style="background:#f0f7f0;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <label style="font-size:12px;font-weight:700;color:#1a5c2a;display:block;margin-bottom:6px">📧 Default Backup Email (Auto + Manual উভয়ের জন্য ব্যবহৃত হবে)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input type="email" id="backup-email-input" placeholder="admin@dphe.gov.bd" style="flex:1;min-width:220px;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        <button class="btn btn-sm btn-primary" onclick="saveBackupEmailSettings(this)">💾 Save Email</button>
+      </div>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="font-size:12px;font-weight:700;color:#1a5c2a">🔁 Auto-Backup (প্রতি ১০ দিনে):</label>
+        <label class="switch" style="position:relative;display:inline-block;width:42px;height:22px">
+          <input type="checkbox" id="auto-backup-toggle" onchange="toggleAutoBackup(this)" style="opacity:0;width:0;height:0">
+          <span id="auto-backup-track" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:22px;transition:.2s"></span>
+          <span id="auto-backup-knob" style="position:absolute;left:2px;top:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></span>
+        </label>
+        <span id="auto-backup-status-label" style="font-size:12px;color:#888">লোড হচ্ছে…</span>
+      </div>
+      <div id="backup-settings-status" style="font-size:11px;color:#888;margin-top:8px"></div>
+    </div>
+
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">
       <button class="btn btn-primary btn-sm" onclick="downloadBackupNow(this)">⬇️ Download Backup Now (Local)</button>
-      <button class="btn btn-sm" style="border-color:#1976d2;color:#1976d2" onclick="openBackupEmailPrompt(this)">📧 Send Backup to Email</button>
+      <button class="btn btn-sm" style="border-color:#1976d2;color:#1976d2" onclick="sendBackupEmailNow(this)">📧 Send Backup to Email Now</button>
     </div>
     <div style="border-top:1px dashed #ddd;padding-top:14px">
       <div style="font-size:13px;font-weight:700;color:#c62828;margin-bottom:6px">⚠️ Restore from Backup File</div>
@@ -3663,89 +3681,333 @@ function exportReportCSV() {
   a.click();
 }
 
-// ── PDF export — captures the already-rendered on-screen report ─────
-// Earlier versions built the PDF with jsPDF's own text engine + an
-// embedded Bengali font (Hind Siliguri). That still produced broken/
-// wrongly-ordered Bangla glyphs, because jsPDF's text renderer has no
-// complex-script shaping engine: it can only map one Unicode codepoint
-// to one glyph, and Bengali conjuncts + reordering vowel signs (matras)
-// require proper OpenType shaping to render correctly — no embedded
-// font fixes that on its own.
+// ── PDF export — jsPDF + autoTable, with Bangla drawn as shaped raster ──
+// jsPDF's own text engine has no complex-script shaping: it can only map
+// one Unicode codepoint to one glyph, so Bengali conjuncts + reordering
+// vowel signs (matras) render broken even with a correctly embedded
+// Bengali font — embedding a font alone never fixes this, shaping is a
+// separate step jsPDF just doesn't do.
 //
-// The fix: don't ask jsPDF to draw Bangla text at all. Instead we
-// screenshot (html2canvas) the #report-content element that's already
-// showing correctly on screen — the browser already shapes Bangla
-// perfectly there — and place that image into the PDF, slicing it
-// across as many A4 pages as needed. This makes the PDF pixel-identical
-// to what's on screen, for every report type, with zero font work.
+// Fix used here: keep the whole PDF built natively with jsPDF/autoTable
+// (borders, layout, English text — all sharp vector, small file, exactly
+// like before). But for any string that contains Bangla, we rasterize
+// just that string on an offscreen <canvas> first — the browser's own
+// canvas text renderer always shapes Bangla correctly — and place the
+// resulting small image at the right spot instead of drawing it as text.
+// So English stays vector text; only Bangla becomes a crisp little image.
+var BANGLA_RE = /[\u0980-\u09FF]/;
+var PDF_BN_FONT_FAMILY = 'PdfBanglaFont';
+var PDF_BN_FONT_READY = false;
+var PDF_BN_FONT_LOADING = null;
+var BANGLA_IMG_CACHE = {};
+
+// Best-effort: load Hind Siliguri as a real web font so the canvas
+// rasterizer uses the same look as the rest of the app. If this fails
+// (e.g. offline), canvas text still falls back to the system's own
+// Bengali font — shaping stays correct either way, only the typeface
+// might differ slightly.
+function loadPdfFonts() {
+  if (PDF_BN_FONT_READY) return Promise.resolve(true);
+  if (PDF_BN_FONT_LOADING) return PDF_BN_FONT_LOADING;
+  var sources = [
+    'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/hindsiliguri/HindSiliguri-Regular.ttf',
+    'https://raw.githubusercontent.com/google/fonts/main/ofl/hindsiliguri/HindSiliguri-Regular.ttf'
+  ];
+  var tryLoad = function(idx) {
+    if (idx >= sources.length) return Promise.resolve(false);
+    return new FontFace(PDF_BN_FONT_FAMILY, 'url(' + sources[idx] + ')').load().then(function(face) {
+      document.fonts.add(face);
+      PDF_BN_FONT_READY = true;
+      return true;
+    }).catch(function(e) {
+      console.warn('Bangla PDF font source failed, trying next:', e);
+      return tryLoad(idx + 1);
+    });
+  };
+  PDF_BN_FONT_LOADING = tryLoad(0);
+  return PDF_BN_FONT_LOADING;
+}
+
+// Rasterizes one string (assumed to contain Bangla) to a small PNG data
+// URL, supersampled for crispness once placed into the PDF at pt scale.
+function banglaTextToImage(text, isBold, fontSizePt, colorHex) {
+  var key = text + '|' + isBold + '|' + fontSizePt + '|' + colorHex;
+  if (BANGLA_IMG_CACHE[key]) return BANGLA_IMG_CACHE[key];
+  var SCALE = 4;
+  var fontPx = (fontSizePt || 9) * (96 / 72) * SCALE;
+  var family = (PDF_BN_FONT_READY ? '"' + PDF_BN_FONT_FAMILY + '", ' : '') + '"Noto Sans Bengali", sans-serif';
+  var probeCtx = document.createElement('canvas').getContext('2d');
+  probeCtx.font = (isBold ? 'bold ' : '') + fontPx + 'px ' + family;
+  var textW = Math.max(1, probeCtx.measureText(text).width);
+  var padX = 3 * SCALE;
+  var canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(textW) + padX * 2;
+  canvas.height = Math.ceil(fontPx * 1.5);
+  var ctx = canvas.getContext('2d');
+  ctx.font = (isBold ? 'bold ' : '') + fontPx + 'px ' + family;
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = colorHex || '#1e1e1e';
+  ctx.fillText(text, padX, canvas.height / 2);
+  var result = { dataUrl: canvas.toDataURL('image/png'), wPt: canvas.width / SCALE, hPt: canvas.height / SCALE };
+  BANGLA_IMG_CACHE[key] = result;
+  return result;
+}
+
+// Draws text at (x,y) like doc.text() would — except Bangla is drawn as
+// a shaped raster image instead of broken glyphs. Use for one-off lines
+// (titles, scope labels, section bars) outside of autoTable cells.
+function drawSmartText(doc, text, x, y, opts) {
+  opts = opts || {};
+  text = String(text == null ? '' : text);
+  if (BANGLA_RE.test(text)) {
+    var img = banglaTextToImage(text, !!opts.bold, opts.fontSize || doc.getFontSize(), opts.color || '#1e1e1e');
+    var w = img.wPt, h = img.hPt;
+    if (opts.maxWidth && w > opts.maxWidth) { var r = opts.maxWidth / w; w = opts.maxWidth; h *= r; }
+    var drawX = (opts.align === 'center') ? x - w / 2 : x;
+    doc.addImage(img.dataUrl, 'PNG', drawX, y - h * 0.72, w, h);
+  } else {
+    doc.text(text, x, y, opts.raw || {});
+  }
+}
+
+// Wraps an autoTable options object so any cell whose text contains
+// Bangla gets blanked out (so jsPDF doesn't draw broken glyphs) and then
+// redrawn as a shaped raster image in the same spot, right size, right
+// color for its section (header/body/footer) — while preserving any
+// didParseCell/didDrawCell hooks the caller already set (e.g. the
+// category-row shading in the species detail report).
+function withBanglaCells(doc, opts) {
+  var origParse = opts.didParseCell, origDraw = opts.didDrawCell;
+  opts.didParseCell = function(data) {
+    if (origParse) origParse(data);
+    var raw = data.cell.raw;
+    if (typeof raw === 'string' && BANGLA_RE.test(raw)) {
+      data.cell._bnRaw = raw;
+      data.cell.text = [''];
+    }
+  };
+  opts.didDrawCell = function(data) {
+    if (data.cell._bnRaw) {
+      var section = data.row.section;
+      var color = section === 'head' ? '#ffffff' : (section === 'foot' ? '#1a5c2a' : '#2d2d2d');
+      var fontSize = (data.cell.styles && data.cell.styles.fontSize) || 8.5;
+      var bold = section !== 'body';
+      var img = banglaTextToImage(data.cell._bnRaw, bold, fontSize, color);
+      var padL = (data.cell.padding && data.cell.padding('left')) || 4;
+      var maxW = data.cell.width - padL * 2;
+      var w = img.wPt, h = img.hPt;
+      if (w > maxW) { var r = maxW / w; w = maxW; h *= r; }
+      var cx = data.cell.x + padL;
+      var cy = data.cell.y + (data.cell.height - h) / 2;
+      doc.addImage(img.dataUrl, 'PNG', cx, cy, w, h);
+    }
+    if (origDraw) origDraw(data);
+  };
+  return opts;
+}
+
 async function exportReportPDF(btnEl) {
-  if (!window.html2canvas) {
-    alert('⚠️ PDF engine (html2canvas) failed to load — please check your internet connection and try again.');
-    return;
-  }
   if (!window.jspdf || !window.jspdf.jsPDF) {
-    alert('⚠️ PDF engine (jsPDF) failed to load — please check your internet connection and try again.');
+    alert('⚠️ PDF engine failed to load — please check your internet connection and try again.');
     return;
   }
-  var target = document.getElementById('report-content');
-  if (!target) { alert('⚠️ No report to export — generate a report first.'); return; }
+  var recs = LAST_REPORT.recs || [];
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ unit:'pt', format:'a4' });
+  var pageW = doc.internal.pageSize.getWidth();
+  var margin = 40;
 
   var origBtnText = btnEl ? btnEl.innerHTML : null;
   if (btnEl) { btnEl.innerHTML = '⏳ Preparing…'; btnEl.disabled = true; }
+  await loadPdfFonts(); // best-effort; canvas rendering works either way
+  if (btnEl) { btnEl.innerHTML = origBtnText; btnEl.disabled = false; }
 
-  // Hide the Print/CSV/PDF buttons themselves while capturing, so they
-  // don't show up inside the exported PDF image.
-  var noPrintEls = target.querySelectorAll('.no-print');
-  noPrintEls.forEach(function(el){ el.style.visibility = 'hidden'; });
+  doc.setFont('helvetica', 'normal');
 
-  try {
-    var canvas = await html2canvas(target, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff'
+  doc.setFillColor(26,92,42);
+  doc.rect(0,0,pageW,70,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica','bold');
+  doc.text('DPHE Tree Plantation Report — ' + reportTypeLabel(LAST_REPORT.type).split(' |')[0], margin, 32);
+  doc.setFontSize(10);
+  doc.setFont('helvetica','normal');
+  doc.text('Department of Public Health Engineering — Bangladesh', margin, 50);
+
+  doc.setTextColor(30,30,30);
+  doc.setFontSize(9);
+  var metaY = 90;
+  drawSmartText(doc, 'Scope: ' + LAST_REPORT.scopeLabel, margin, metaY, {fontSize:9, color:'#1e1e1e'});
+  doc.text('Period: ' + LAST_REPORT.from + ' to ' + LAST_REPORT.to, margin, metaY + 14);
+
+  var startY = metaY + 34;
+
+  if (LAST_REPORT.type === 'summary') {
+    var total = recs.length, alive = recs.filter(function(r){return r.status==='Alive';}).length;
+    var dead = recs.filter(function(r){return r.status==='Dead';}).length;
+    var care = recs.filter(function(r){return r.status==='Care Required';}).length;
+    var survRate = total>0?Math.round(alive/total*100):0;
+    var stats = [['Total Trees',String(total)],['Alive',String(alive)],['Dead',String(dead)],['Care Required',String(care)],['Survival Rate',survRate+'%'],['Total Cost (BDT)',fmtBDT(costSum(recs))]];
+    var boxW = (pageW - margin*2 - 5*8) / 6;
+    stats.forEach(function(s,i){
+      var x = margin + i*(boxW+8);
+      doc.setDrawColor(200,220,200); doc.setFillColor(248,253,248);
+      doc.roundedRect(x, startY, boxW, 46, 4, 4, 'FD');
+      doc.setFontSize(7.5); doc.setTextColor(120,120,120); doc.setFont('helvetica','normal');
+      doc.text(s[0], x+6, startY+16, {maxWidth: boxW-12});
+      doc.setFontSize(11); doc.setTextColor(26,92,42); doc.setFont('helvetica','bold');
+      doc.text(s[1], x+6, startY+34, {maxWidth: boxW-12});
+      doc.setFont('helvetica','normal');
+    });
+    var byOffice = {};
+    recs.forEach(function(r){ var o=officeInfo(r); if(!byOffice[o.key]) byOffice[o.key]={name:o.name,count:0}; byOffice[o.key].count++; });
+    var officeKeysSumPdf = Object.keys(byOffice).sort(compareOfficeKeys);
+    doc.autoTable(withBanglaCells(doc, {
+      startY: startY+64, margin:{left:margin,right:margin},
+      head:[['Name of the Office','Trees']], body:officeKeysSumPdf.map(function(k){ return [byOffice[k].name,String(byOffice[k].count)]; }),
+      headStyles:{fillColor:[26,92,42],textColor:255,fontSize:9},
+      bodyStyles:{fontSize:8.5}, theme:'grid',
+    }));
+
+  } else if (LAST_REPORT.type === 'office') {
+    var byOffice2 = {};
+    recs.forEach(function(r) {
+      var o = officeInfo(r);
+      if (!byOffice2[o.key]) byOffice2[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, activity:{} };
+      var b = byOffice2[o.key];
+      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      var act = careActivityOf(r.remarks);
+      if (act) b.activity[act] = (b.activity[act]||0)+1;
+    });
+    var officeKeys = Object.keys(byOffice2).sort(compareOfficeKeys);
+    var body = officeKeys.map(function(k,i){
+      var b = byOffice2[k];
+      return [String(i+1), b.name, String(b.count), formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST), Object.keys(b.sources).join(', '), fmtBDT(b.cost), formatCategoryCounts(b.activity, CARE_ACTIVITY_LIST)];
+    });
+    var grandTrees = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].count; }, 0);
+    var grandCost = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].cost; }, 0);
+    doc.autoTable(withBanglaCells(doc, {
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Sl','Name of the Office','Trees','Species Category','Cost Source','Cost (BDT)','Care/Maintenance Activity']],
+      body:body,
+      foot:[['', 'Total', String(grandTrees), '', '', fmtBDT(grandCost), '']],
+      headStyles:{fillColor:[26,92,42],textColor:255,fontSize:8},
+      bodyStyles:{fontSize:7.5},
+      footStyles:{fillColor:[232,245,233],textColor:[26,92,42],fontSize:8,fontStyle:'bold'},
+      theme:'grid',
+      columnStyles:{6:{cellWidth:130}},
+    }));
+
+  } else if (LAST_REPORT.type === 'trend') {
+    var dates = recs.map(function(r){return r.date;}).filter(Boolean).sort();
+    var body2 = [];
+    if (dates.length) {
+      var latestDate = new Date(dates[dates.length-1]);
+      for (var i=11;i>=0;i--) {
+        var d = new Date(latestDate.getFullYear(), latestDate.getMonth()-i, 1);
+        var inMonth = recs.filter(function(r){ var rd=new Date(r.date); return rd.getFullYear()===d.getFullYear() && rd.getMonth()===d.getMonth(); });
+        body2.push([d.toLocaleString('default',{month:'short'})+' '+d.getFullYear(), String(inMonth.length), fmtBDT(costSum(inMonth))]);
+      }
+    }
+    doc.autoTable(withBanglaCells(doc, {
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Month','Trees Planted','Cost (BDT)']], body:body2,
+      headStyles:{fillColor:[26,92,42],textColor:255,fontSize:9},
+      bodyStyles:{fontSize:8.5}, theme:'grid',
+    }));
+
+  } else if (LAST_REPORT.type === 'species_detail') {
+    var byOfficeSDp = {};
+    recs.forEach(function(r) {
+      var o = officeInfo(r);
+      if (!byOfficeSDp[o.key]) byOfficeSDp[o.key] = { name:o.name, catSpecies:{} };
+      var b = byOfficeSDp[o.key];
+      var cat = speciesCategoryOf(r.cat);
+      if (!b.catSpecies[cat]) b.catSpecies[cat] = {};
+      b.catSpecies[cat][r.species] = (b.catSpecies[cat][r.species]||0)+1;
+    });
+    var officeKeysSD = Object.keys(byOfficeSDp).sort(compareOfficeKeys);
+    var pageH = doc.internal.pageSize.getHeight();
+    var cursorY = startY;
+    if (!officeKeysSD.length) {
+      doc.setFontSize(10); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+      doc.text('No data', margin, cursorY+10);
+    }
+    officeKeysSD.forEach(function(k){
+      var b = byOfficeSDp[k];
+      var officeTotal = 0;
+      var body = [];
+      var catRowIdx = {};
+      SPECIES_CATEGORY_LIST.filter(function(c){ return b.catSpecies[c]; }).forEach(function(c){
+        var catTotal = Object.keys(b.catSpecies[c]).reduce(function(s,sp){ return s + b.catSpecies[c][sp]; }, 0);
+        officeTotal += catTotal;
+        catRowIdx[body.length] = true;
+        body.push([c, String(catTotal)]);
+        Object.keys(b.catSpecies[c]).sort().forEach(function(sp){
+          body.push(['     ' + sp, String(b.catSpecies[c][sp])]);
+        });
+      });
+      // Office title bar — page-break first if it won't fit
+      if (cursorY + 44 > pageH - margin) { doc.addPage(); cursorY = margin; }
+      doc.setFillColor(26,92,42);
+      doc.rect(margin, cursorY, pageW - margin*2, 20, 'F');
+      drawSmartText(doc, b.name + ' — Total Trees: ' + officeTotal, margin+8, cursorY+14, {fontSize:9.5, bold:true, color:'#ffffff', maxWidth: pageW-margin*2-16});
+      cursorY += 24;
+      doc.autoTable(withBanglaCells(doc, {
+        startY: cursorY, margin:{left:margin,right:margin},
+        head:[['Species Category / Species','Count']], body:body,
+        headStyles:{fillColor:[200,225,200],textColor:[26,92,42],fontSize:8},
+        bodyStyles:{fontSize:7.5}, theme:'grid',
+        columnStyles:{1:{cellWidth:70,halign:'center'}},
+        didParseCell: function(data){
+          if (data.section === 'body' && catRowIdx[data.row.index]) {
+            data.cell.styles.fillColor = [232,245,233];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }));
+      cursorY = doc.lastAutoTable.finalY + 16;
     });
 
-    var jsPDF = window.jspdf.jsPDF;
-    var doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    var pageW = doc.internal.pageSize.getWidth();
-    var pageH = doc.internal.pageSize.getHeight();
-    var margin = 24;
-    var imgW = pageW - margin * 2;
-    var pxPerPtX = canvas.width / imgW;              // source pixels per output pt
-    var usablePageHpt = pageH - margin * 2;
-    var pageSlicePx = Math.floor(usablePageHpt * pxPerPtX); // source px per page-height
+  } else if (LAST_REPORT.type === 'species_summary') {
+    var bySpeciesPdf = {};
+    recs.forEach(function(r){
+      if (!bySpeciesPdf[r.species]) bySpeciesPdf[r.species] = { species:r.species, cat:speciesCategoryOf(r.cat), total:0, alive:0 };
+      bySpeciesPdf[r.species].total++;
+      if (r.status === 'Alive') bySpeciesPdf[r.species].alive++;
+    });
+    var listPdf = Object.keys(bySpeciesPdf).map(function(k){ return bySpeciesPdf[k]; })
+      .sort(function(a,b){ return b.total - a.total || a.species.localeCompare(b.species); });
+    var bodySS = listPdf.map(function(s,i){
+      var pct = s.total>0?Math.round(s.alive/s.total*100):0;
+      return [String(i+1), s.species, s.cat, String(s.total), String(s.alive), pct+'%'];
+    });
+    doc.autoTable(withBanglaCells(doc, {
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Sl','Species','Category','Total Planted','Alive','Survival %']], body:bodySS,
+      headStyles:{fillColor:[26,92,42],textColor:255,fontSize:9},
+      bodyStyles:{fontSize:8.5}, theme:'grid',
+    }));
 
-    var totalPages = Math.max(1, Math.ceil(canvas.height / pageSlicePx));
-
-    for (var i = 0; i < totalPages; i++) {
-      if (i > 0) doc.addPage();
-      var sy = i * pageSlicePx;
-      var sh = Math.min(pageSlicePx, canvas.height - sy);
-
-      var pageCanvas = document.createElement('canvas');
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = sh;
-      var ctx = pageCanvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-      ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
-
-      var pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95);
-      var pageImgH = imgW * sh / canvas.width;
-      doc.addImage(pageImgData, 'JPEG', margin, margin, imgW, pageImgH);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8); doc.setTextColor(160, 160, 160);
-      doc.text('Page ' + (i + 1) + ' of ' + totalPages + ' — DPHE Tree Tracker', margin, pageH - 12);
-    }
-
-    doc.save('dphe_' + LAST_REPORT.type + '_report_' + new Date().toISOString().split('T')[0] + '.pdf');
-  } catch (err) {
-    alert('⚠️ PDF তৈরি করতে সমস্যা হয়েছে / Failed to create PDF: ' + (err && err.message || err));
-  } finally {
-    noPrintEls.forEach(function(el){ el.style.visibility = ''; });
-    if (btnEl) { btnEl.innerHTML = origBtnText; btnEl.disabled = false; }
+  } else { // detailed
+    var body3 = recs.map(function(r){ return [r.id, r.date, r.div||'—', r.dis||'—', r.upa||'—', r.species, r.status, fmtBDT(parseFloat(r.cost)||0)]; });
+    doc.autoTable(withBanglaCells(doc, {
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['ID','Date','Circle','District','Upazilla','Species','Status','Cost (BDT)']], body:body3,
+      headStyles:{fillColor:[26,92,42],textColor:255,fontSize:8},
+      bodyStyles:{fontSize:7}, theme:'striped',
+    }));
   }
+
+  var pageCount = doc.internal.getNumberOfPages();
+  for (var p=1;p<=pageCount;p++) {
+    doc.setPage(p);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8); doc.setTextColor(160,160,160);
+    doc.text('Page ' + p + ' of ' + pageCount + ' — DPHE Tree Tracker', margin, doc.internal.pageSize.getHeight()-20);
+  }
+
+  doc.save('dphe_' + LAST_REPORT.type + '_report_' + new Date().toISOString().split('T')[0] + '.pdf');
 }
 
 // ════════════════════════════════
@@ -5797,18 +6059,22 @@ function showPage(id, el) {
 // Full backup = the raw Users + Records + Species data straight from the
 // Google Sheet (via the backend, so passwordHash etc. are preserved for a
 // working restore later — the client's own copy of `users` is sanitized
-// and would break logins if backed up instead). Two ways to get a copy:
-//   1) Download Backup Now  → saved to the admin's own device.
-//   2) Send Backup to Email → emailed as a .json attachment; the backend
-//      trashes any earlier backup email first, so only the latest one
-//      is ever kept in the inbox.
+// and would break logins if backed up instead). Three independent controls:
+//   1) Download Backup Now      → saved to the admin's own device.
+//   2) Send Backup to Email Now → emailed on demand, any time.
+//   3) Auto-Backup (every 10 days) → a real server-side schedule, kept
+//      separate from #2 so toggling it never depends on clicking anything.
+// Whichever way a backup email arrives, the backend always trashes any
+// earlier backup email first, so only the latest one is ever kept.
 // Restore reads a previously-downloaded .json backup file and replaces
 // all three sheets with its contents — a full, destructive restore.
 
 function updateBackupCardVisibility() {
   var card = document.getElementById('backup-restore-card');
   if (!card) return;
-  card.style.display = (SESSION.role === 'admin') ? 'block' : 'none';
+  var isAdmin = (SESSION.role === 'admin');
+  card.style.display = isAdmin ? 'block' : 'none';
+  if (isAdmin) loadBackupSettingsUI();
 }
 
 function setBackupStatus(msg, isError) {
@@ -5816,6 +6082,77 @@ function setBackupStatus(msg, isError) {
   if (!el) return;
   el.textContent = msg;
   el.style.color = isError ? '#c62828' : '#2d8a42';
+}
+
+function setBackupSettingsStatus(msg, isError) {
+  var el = document.getElementById('backup-settings-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? '#c62828' : '#888';
+}
+
+// Loads the saved default email + current auto-backup on/off state and
+// reflects them in the UI (email field, toggle switch, status line).
+function loadBackupSettingsUI() {
+  if (!backendConfigured()) return;
+  var toggle = document.getElementById('auto-backup-toggle');
+  var label = document.getElementById('auto-backup-status-label');
+  apiCall('getBackupSettings', {}).then(function(res) {
+    if (!res || !res.ok) { if (label) label.textContent = 'লোড ব্যর্থ'; return; }
+    var emailInput = document.getElementById('backup-email-input');
+    if (emailInput && res.email) emailInput.value = res.email;
+    if (toggle) toggle.checked = !!res.autoEnabled;
+    updateAutoBackupToggleVisual();
+    if (label) {
+      label.textContent = res.autoEnabled
+        ? '✅ চালু আছে' + (res.lastSentAt ? (' — শেষ ব্যাকআপ: ' + res.lastSentAt) : '')
+        : '⏸️ বন্ধ আছে';
+    }
+  });
+}
+
+// The checkbox is visually a toggle switch (see CSS-free inline styling
+// on the card); this just recolors the little track/knob based on state
+// since no separate stylesheet rule was added for :checked.
+function updateAutoBackupToggleVisual() {
+  var toggle = document.getElementById('auto-backup-toggle');
+  var track = document.getElementById('auto-backup-track');
+  var knob = document.getElementById('auto-backup-knob');
+  if (!toggle) return;
+  if (track) track.style.background = toggle.checked ? '#2d8a42' : '#ccc';
+  if (knob) knob.style.left = toggle.checked ? '22px' : '2px';
+}
+
+function saveBackupEmailSettings(btnEl) {
+  var input = document.getElementById('backup-email-input');
+  var email = (input && input.value || '').trim();
+  if (!email || email.indexOf('@') === -1) { setBackupSettingsStatus('❌ সঠিক ইমেইল অ্যাড্রেস দিন।', true); return; }
+  var orig = btnEl.innerHTML; btnEl.disabled = true; btnEl.innerHTML = '⏳ সেভ হচ্ছে…';
+  apiCall('setBackupEmail', { email: email }).then(function(res) {
+    btnEl.disabled = false; btnEl.innerHTML = orig;
+    if (!res || !res.ok) { setBackupSettingsStatus('❌ সেভ ব্যর্থ: ' + (res && res.error || 'unknown'), true); return; }
+    setBackupSettingsStatus('✅ ব্যাকআপ ইমেইল সেভ হয়েছে: ' + res.email, false);
+  });
+}
+
+function toggleAutoBackup(checkboxEl) {
+  updateAutoBackupToggleVisual();
+  var enabling = checkboxEl.checked;
+  var label = document.getElementById('auto-backup-status-label');
+  if (label) label.textContent = '⏳ আপডেট হচ্ছে…';
+  apiCall('setAutoBackup', { enabled: enabling }).then(function(res) {
+    if (!res || !res.ok) {
+      checkboxEl.checked = !enabling; // revert on failure
+      updateAutoBackupToggleVisual();
+      if (label) label.textContent = '❌ ব্যর্থ';
+      setBackupSettingsStatus('❌ ' + (res && res.error || 'Auto-backup আপডেট ব্যর্থ হয়েছে।'), true);
+      return;
+    }
+    if (label) label.textContent = res.autoEnabled ? '✅ চালু আছে' : '⏸️ বন্ধ আছে';
+    setBackupSettingsStatus(res.autoEnabled
+      ? '✅ প্রতি ১০ দিনে অটো-ব্যাকআপ চালু করা হয়েছে।'
+      : '⏸️ অটো-ব্যাকআপ বন্ধ করা হয়েছে।', false);
+  });
 }
 
 function downloadBackupNow(btnEl) {
@@ -5833,18 +6170,19 @@ function downloadBackupNow(btnEl) {
   });
 }
 
-function openBackupEmailPrompt(btnEl) {
-  var defaultEmail = (SESSION && SESSION.email) || '';
-  var target = prompt('কোন ইমেইলে ব্যাকআপ পাঠানো হবে?\nWhich email should receive the backup?', defaultEmail);
-  if (!target) return;
-  target = target.trim();
-  if (!target) return;
+// Sends a backup right now to the saved Default Backup Email — no prompt.
+// If no default email has been saved yet, it asks the admin to save one first.
+function sendBackupEmailNow(btnEl) {
+  var input = document.getElementById('backup-email-input');
+  var email = (input && input.value || '').trim();
+  if (!email) { setBackupStatus('⚠️ আগে উপরে একটি Default Backup Email সেভ করুন।', true); return; }
   var orig = btnEl.innerHTML; btnEl.disabled = true; btnEl.innerHTML = '⏳ পাঠানো হচ্ছে…';
-  apiCall('backupNow', { sendEmail:true, emailTo: target }).then(function(res) {
+  apiCall('backupNow', { sendEmail:true, emailTo: email }).then(function(res) {
     btnEl.disabled = false; btnEl.innerHTML = orig;
     if (!res || !res.ok) { setBackupStatus('❌ ব্যাকআপ ব্যর্থ: ' + (res && res.error || 'unknown'), true); return; }
     if (res.emailResult && res.emailResult.ok) {
-      setBackupStatus('✅ ব্যাকআপ ইমেইল পাঠানো হয়েছে: ' + target + ' (আগের ব্যাকআপ ইমেইল মুছে ফেলা হয়েছে)', false);
+      setBackupStatus('✅ ব্যাকআপ ইমেইল পাঠানো হয়েছে: ' + email + ' (আগের ব্যাকআপ ইমেইল মুছে ফেলা হয়েছে)', false);
+      loadBackupSettingsUI(); // refresh "last sent" time
     } else {
       setBackupStatus('⚠️ ব্যাকআপ তৈরি হয়েছে কিন্তু ইমেইল পাঠাতে সমস্যা হয়েছে: ' + (res.emailResult && res.emailResult.error || 'unknown'), true);
     }
