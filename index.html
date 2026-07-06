@@ -3684,16 +3684,42 @@ function exportReportCSV() {
   a.click();
 }
 
+// ── Bangla font for jsPDF ─────────────────────────────────────────────
+// jsPDF's built-in fonts (helvetica etc.) have zero Bengali glyphs, which
+// is why Bangla text and even the English *inside the same string* came
+// out as garbled symbols earlier — the standard font has no mapping for
+// those code points at all. Fix: fetch the actual SolaimanLipi.ttf and
+// embed it into the PDF via jsPDF's VFS, then draw every string with it
+// instead of helvetica. Loaded once and cached — every export after the
+// first is instant. Shaping still isn't perfect (jsPDF has no complex-
+// script engine, so some conjuncts/vowel signs may look slightly off),
+// but real glyphs from a real Bangla font is a world away from mojibake.
+var SOLAIMAN_LIPI_B64 = null;
+var SOLAIMAN_LIPI_URL = 'https://cdn.jsdelivr.net/gh/mirazmac/bengali-webfont-cdn@master/solaimanlipi/SolaimanLipiNormal.ttf';
+
+async function ensureBanglaFont(doc) {
+  if (!SOLAIMAN_LIPI_B64) {
+    var res = await fetch(SOLAIMAN_LIPI_URL);
+    if (!res.ok) throw new Error('Font fetch failed: HTTP ' + res.status);
+    var buf = await res.arrayBuffer();
+    var bytes = new Uint8Array(buf);
+    var binary = '';
+    var chunkSize = 0x8000;
+    for (var i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    SOLAIMAN_LIPI_B64 = btoa(binary);
+  }
+  doc.addFileToVFS('SolaimanLipi.ttf', SOLAIMAN_LIPI_B64);
+  doc.addFont('SolaimanLipi.ttf', 'SolaimanLipi', 'normal');
+}
+
 // ── PDF export — plain jsPDF, drawn directly (no html2canvas) ───────
-// Per your call: crisp real/selectable vector text is worth it even
-// though jsPDF has no complex-script shaping engine, so Bangla conjuncts
-// and two-part vowel signs (ো/ৌ) can come out slightly wrong (e.g. a
-// placeholder dot instead of the correct joined shape). This reads the
-// already-rendered report table cells directly from the DOM (so numbers/
-// labels always match what's on screen) and draws them itself with full
-// control over column widths, page breaks, and repeating headers — none
-// of html2pdf.js's clipped-columns / blank-page-gap problems can happen
-// here since nothing is rasterized.
+// Reads the already-rendered report table cells directly from the DOM
+// (so numbers/labels always match what's on screen) and draws them
+// itself with full control over column widths, page breaks, and
+// repeating headers — none of html2pdf.js's clipped-columns / blank-
+// page-gap problems can happen here since nothing is rasterized.
 async function exportReportPDF(btnEl) {
   var jsPDFLib = window.jspdf && window.jspdf.jsPDF;
   if (!jsPDFLib) {
@@ -3713,14 +3739,32 @@ async function exportReportPDF(btnEl) {
     var orientation = wideReportTypes[LAST_REPORT.type] ? 'landscape' : 'portrait';
 
     var doc = new jsPDFLib({ unit: 'pt', format: 'a4', orientation: orientation });
+
+    // Try to embed a real Bangla font; if it fails (offline, blocked
+    // CDN, etc.) fall back to helvetica so export still completes —
+    // Bangla just won't render correctly in that fallback case.
+    var fontName = 'helvetica';
+    try {
+      await ensureBanglaFont(doc);
+      fontName = 'SolaimanLipi';
+    } catch (fontErr) {
+      console.warn('Bangla font could not be loaded, falling back to helvetica (Bangla text will not render correctly):', fontErr);
+    }
+    // SolaimanLipi is only registered as a single "normal" weight — there's
+    // no bold face to switch to, so headers/emphasis lean on background
+    // color instead of font-weight when this font is active.
+    function setDocFont(bold) {
+      doc.setFont(fontName, (fontName === 'helvetica' && bold) ? 'bold' : 'normal');
+    }
+
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
     var marginX = 30, marginTop = 36, marginBottom = 30;
     var usableW = pageW - marginX * 2;
     var y = marginTop;
 
-    // Give the Taka sign a readable "Tk" stand-in (jsPDF's core fonts
-    // don't have that glyph); everything else is passed through as-is.
+    // Give the Taka sign a readable "Tk" stand-in in case it's missing
+    // from the embedded font; everything else is passed through as-is.
     function sanitize(s) {
       return String(s == null ? '' : s).replace(/৳/g, 'Tk ').replace(/\s+/g, ' ').trim();
     }
@@ -3735,10 +3779,10 @@ async function exportReportPDF(btnEl) {
 
     // ── Title block — pulled straight from LAST_REPORT so it always
     // matches what's on screen ──
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(26, 92, 42);
+    setDocFont(true); doc.setFontSize(14); doc.setTextColor(26, 92, 42);
     doc.text('DPHE Tree Plantation Report - ' + sanitize(reportTypeLabel(LAST_REPORT.type)), marginX, y);
     y += 18;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90, 90, 90);
+    setDocFont(false); doc.setFontSize(9.5); doc.setTextColor(90, 90, 90);
     doc.text('Scope: ' + sanitize(LAST_REPORT.scopeLabel), marginX, y); y += 13;
     doc.text('Period: ' + sanitize(LAST_REPORT.from) + ' to ' + sanitize(LAST_REPORT.to), marginX, y); y += 20;
 
@@ -3762,7 +3806,7 @@ async function exportReportPDF(btnEl) {
         var headingText = sanitize(heading.innerText || heading.textContent);
         if (headingText) {
           ensureSpace(24);
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(26, 92, 42);
+          setDocFont(true); doc.setFontSize(10.5); doc.setTextColor(26, 92, 42);
           doc.text(headingText, marginX, y);
           y += 16;
         }
@@ -3790,7 +3834,7 @@ async function exportReportPDF(btnEl) {
       // Column widths: measure header + a sample of body cells, clamp
       // each between 40pt and 45% of the table width, then scale
       // proportionally so the total is exactly usableW.
-      doc.setFontSize(8.5);
+      setDocFont(false); doc.setFontSize(8.5);
       var rawW = [];
       for (var c = 0; c < colCount; c++) {
         var w = doc.getTextWidth(headers[c] || '') + 16;
@@ -3808,7 +3852,7 @@ async function exportReportPDF(btnEl) {
         ensureSpace(rowH);
         doc.setFillColor(26, 92, 42);
         doc.setTextColor(255, 255, 255);
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+        setDocFont(true); doc.setFontSize(8.5);
         doc.rect(marginX, y, usableW, rowH, 'F');
         var x = marginX;
         headers.forEach(function(h, c) {
@@ -3835,8 +3879,7 @@ async function exportReportPDF(btnEl) {
         ensureSpace(rowH, headers.length ? drawHeaderRow : null);
         if (opts.bold) { doc.setFillColor(232, 245, 233); doc.rect(marginX, y, usableW, rowH, 'F'); }
         else if (opts.shade) { doc.setFillColor(248, 253, 248); doc.rect(marginX, y, usableW, rowH, 'F'); }
-        doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
-        doc.setFontSize(8.5);
+        setDocFont(opts.bold); doc.setFontSize(8.5);
         doc.setTextColor(40, 40, 40);
         var x = marginX;
         cells.forEach(function(cellText, c) {
@@ -3860,7 +3903,7 @@ async function exportReportPDF(btnEl) {
     var pageCount = doc.internal.getNumberOfPages();
     for (var p = 1; p <= pageCount; p++) {
       doc.setPage(p);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+      setDocFont(false); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
       doc.text('Page ' + p + ' / ' + pageCount, pageW - marginX - 50, pageH - 14);
     }
 
