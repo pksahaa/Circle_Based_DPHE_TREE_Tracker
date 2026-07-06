@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,sans-serif;background:#f0f4f0;color:#1a1a1a;min-height:100vh;font-size:14px}
@@ -3684,29 +3685,24 @@ function exportReportCSV() {
   a.click();
 }
 
-// ── Bangla font for jsPDF ─────────────────────────────────────────────
-// jsPDF's built-in fonts (helvetica etc.) have zero Bengali glyphs, which
-// is why Bangla text and even the English *inside the same string* came
-// out as garbled symbols earlier — the standard font has no mapping for
-// those code points at all. Fix: fetch Noto Sans Bengali (Regular AND
-// Bold — unlike SolaimanLipi, this family actually ships a real bold
-// weight, and Google builds it with the standard Latin glyph set merged
-// in, so plain English cells look right too) and embed both into the
-// PDF via jsPDF's VFS. Loaded once and cached — every export after the
-// first is instant. Shaping still isn't perfect (jsPDF has no complex-
-// script engine, so some conjuncts/vowel signs may look slightly off),
-// but real glyphs from a real Bangla font is a world away from mojibake.
-var NOTO_BENGALI_B64 = { normal: null, bold: null };
-var NOTO_BENGALI_URLS = {
-  normal: 'https://cdn.jsdelivr.net/gh/notofonts/noto-sans-bengali@main/unhinted/ttf/NotoSansBengali-Regular.ttf',
-  bold: 'https://cdn.jsdelivr.net/gh/notofonts/noto-sans-bengali@main/unhinted/ttf/NotoSansBengali-Bold.ttf'
-};
+// ── Bangla font for jsPDF — Nikosh ────────────────────────────────────
+// jsPDF's built-in fonts (helvetica etc.) have zero Bengali glyphs. Earlier
+// attempts used Hind Siliguri, then Noto Sans Bengali — both are fine fonts
+// but rendered noticeably rough inside jsPDF's simple (non-shaping) text
+// engine. Nikosh — the Bangladesh government's own standard Bangla font —
+// reads far more cleanly in this same non-shaping renderer, which is why
+// it's used here. Loaded once from a CDN mirror and cached in memory;
+// every export after the first is instant. Only one weight exists for
+// Nikosh, so it is registered under both 'normal' and 'bold' styles —
+// bold text won't look visually heavier, but the glyphs stay correct
+// instead of falling back to a font with no Bangla support at all.
+var PDF_FONT_NAME = 'Nikosh';
+var PDF_FONT_READY = false;
+var PDF_FONT_LOADING = null;
+var PDF_FONT_B64_REGULAR = null;
 
-async function fetchFontBase64(url) {
-  var res = await fetch(url);
-  if (!res.ok) throw new Error('Font fetch failed: HTTP ' + res.status);
-  var buf = await res.arrayBuffer();
-  var bytes = new Uint8Array(buf);
+function arrayBufferToBase64(buffer) {
+  var bytes = new Uint8Array(buffer);
   var binary = '';
   var chunkSize = 0x8000;
   for (var i = 0; i < bytes.length; i += chunkSize) {
@@ -3715,224 +3711,270 @@ async function fetchFontBase64(url) {
   return btoa(binary);
 }
 
-async function ensureBanglaFont(doc) {
-  if (!NOTO_BENGALI_B64.normal || !NOTO_BENGALI_B64.bold) {
-    var pair = await Promise.all([
-      fetchFontBase64(NOTO_BENGALI_URLS.normal),
-      fetchFontBase64(NOTO_BENGALI_URLS.bold)
-    ]);
-    NOTO_BENGALI_B64.normal = pair[0];
-    NOTO_BENGALI_B64.bold = pair[1];
-  }
-  // Registered as two entirely separate font families (NotoBengaliRegular /
-  // NotoBengaliBold) rather than one family with 'normal'/'bold' styles —
-  // sharing one family name across two different embedded TTFs was
-  // corrupting letter glyph lookups (digits kept working, letters went
-  // blank) in testing. Two independent names sidesteps that.
-  doc.addFileToVFS('NotoSansBengali-Regular.ttf', NOTO_BENGALI_B64.normal);
-  doc.addFont('NotoSansBengali-Regular.ttf', 'NotoBengaliRegular', 'normal');
-  doc.addFileToVFS('NotoSansBengali-Bold.ttf', NOTO_BENGALI_B64.bold);
-  doc.addFont('NotoSansBengali-Bold.ttf', 'NotoBengaliBold', 'normal');
+function loadPdfFonts() {
+  if (PDF_FONT_READY) return Promise.resolve(true);
+  if (PDF_FONT_LOADING) return PDF_FONT_LOADING;
+  var sources = [
+    'https://cdn.jsdelivr.net/gh/hmoazzem/bangla-fonts@master/Nikosh.ttf',
+    'https://raw.githubusercontent.com/hmoazzem/bangla-fonts/master/Nikosh.ttf',
+    'https://cdn.jsdelivr.net/gh/shiftenterdev/bangla-font@master/Nikosh.ttf',
+  ];
+  var tryLoad = function(idx) {
+    if (idx >= sources.length) return Promise.resolve(false);
+    return fetch(sources[idx])
+      .then(function(r){ if (!r.ok) throw new Error('font fetch failed: HTTP ' + r.status); return r.arrayBuffer(); })
+      .then(function(buf) {
+        PDF_FONT_B64_REGULAR = arrayBufferToBase64(buf);
+        PDF_FONT_READY = true;
+        return true;
+      })
+      .catch(function(e) {
+        console.warn('Nikosh font source failed, trying next:', e);
+        return tryLoad(idx + 1);
+      });
+  };
+  PDF_FONT_LOADING = tryLoad(0).then(function(ok) {
+    if (!ok) console.warn('Nikosh font could not be loaded from any source, falling back to English-only PDF.');
+    return ok;
+  });
+  return PDF_FONT_LOADING;
 }
 
-// ── PDF export — plain jsPDF, drawn directly (no html2canvas) ───────
-// Reads the already-rendered report table cells directly from the DOM
-// (so numbers/labels always match what's on screen) and draws them
-// itself with full control over column widths, page breaks, and
-// repeating headers — none of html2pdf.js's clipped-columns / blank-
-// page-gap problems can happen here since nothing is rasterized.
+function registerPdfFont(doc) {
+  if (!PDF_FONT_READY) return false;
+  doc.addFileToVFS('Nikosh.ttf', PDF_FONT_B64_REGULAR);
+  doc.addFont('Nikosh.ttf', PDF_FONT_NAME, 'normal');
+  doc.addFont('Nikosh.ttf', PDF_FONT_NAME, 'bold'); // single weight — reused so setFont(...,'bold') doesn't error
+  return true;
+}
+
+// Strip Bengali-script characters (used only as a fallback when the
+// Bangla font could not be loaded, so the PDF still reads cleanly).
+function stripBanglaForPdf(str) {
+  return String(str == null ? '' : str)
+    .replace(/[\u0980-\u09FF]/g, '')
+    .replace(/[|,\s]{2,}/g, ' ')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+([,.)])/g, '$1')
+    .trim() || '\u2014';
+}
+
+// ── PDF export — vector text via jsPDF-AutoTable, per report type ─────
+// Rebuilds each report as real tables (not rasterized) so the PDF stays
+// crisp, text-selectable, and small in file size; the Nikosh font above
+// supplies the Bangla glyphs.
 async function exportReportPDF(btnEl) {
-  var jsPDFLib = window.jspdf && window.jspdf.jsPDF;
-  if (!jsPDFLib) {
-    alert('⚠️ PDF engine (jsPDF) failed to load — please check your internet connection and try again.');
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('⚠️ PDF engine failed to load — please check your internet connection and try again.');
     return;
   }
-  var target = document.getElementById('report-content');
-  if (!target) { alert('⚠️ No report to export — generate a report first.'); return; }
+  var recs = LAST_REPORT.recs || [];
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ unit:'pt', format:'a4' });
+  var pageW = doc.internal.pageSize.getWidth();
+  var margin = 40;
 
   var origBtnText = btnEl ? btnEl.innerHTML : null;
   if (btnEl) { btnEl.innerHTML = '⏳ Preparing…'; btnEl.disabled = true; }
+  var fontOk = await loadPdfFonts();
+  if (btnEl) { btnEl.innerHTML = origBtnText; btnEl.disabled = false; }
+  var FONT = 'helvetica';
+  var txt = function(s){ return String(s); };
+  if (fontOk) {
+    registerPdfFont(doc);
+    FONT = PDF_FONT_NAME;
+  } else {
+    txt = stripBanglaForPdf; // graceful fallback: no broken glyphs, plain English text
+  }
+  doc.setFont(FONT, 'normal');
 
-  try {
-    // Wide reports (Office Register, Detailed Record, Species Report — 7
-    // to 10 columns) render far more legibly in landscape.
-    var wideReportTypes = { office: true, detailed: true, species_summary: true };
-    var orientation = wideReportTypes[LAST_REPORT.type] ? 'landscape' : 'portrait';
+  doc.setFillColor(26,92,42);
+  doc.rect(0,0,pageW,70,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16);
+  doc.setFont(FONT,'bold');
+  doc.text(txt('DPHE Tree Plantation Report — ' + reportTypeLabel(LAST_REPORT.type).split(' |')[0]), margin, 32);
+  doc.setFontSize(10);
+  doc.setFont(FONT,'normal');
+  doc.text('Department of Public Health Engineering — Bangladesh', margin, 50);
 
-    var doc = new jsPDFLib({ unit: 'pt', format: 'a4', orientation: orientation });
+  doc.setTextColor(30,30,30);
+  doc.setFontSize(9);
+  var metaY = 90;
+  doc.text(txt('Scope: ' + LAST_REPORT.scopeLabel), margin, metaY);
+  doc.text('Period: ' + LAST_REPORT.from + ' to ' + LAST_REPORT.to, margin, metaY + 14);
 
-    // Try to embed a real Bangla font; if it fails (offline, blocked
-    // CDN, etc.) fall back to helvetica so export still completes —
-    // Bangla just won't render correctly in that fallback case.
-    var fontsLoaded = false;
-    try {
-      await ensureBanglaFont(doc);
-      fontsLoaded = true;
-    } catch (fontErr) {
-      console.warn('Bangla font could not be loaded, falling back to helvetica (Bangla text will not render correctly):', fontErr);
-    }
-    function setDocFont(bold) {
-      if (fontsLoaded) { doc.setFont(bold ? 'NotoBengaliBold' : 'NotoBengaliRegular', 'normal'); }
-      else { doc.setFont('helvetica', bold ? 'bold' : 'normal'); }
-    }
+  var startY = metaY + 34;
+  var tableFontStyles = { font: FONT };
 
-    var pageW = doc.internal.pageSize.getWidth();
-    var pageH = doc.internal.pageSize.getHeight();
-    var marginX = 30, marginTop = 36, marginBottom = 30;
-    var usableW = pageW - marginX * 2;
-    var y = marginTop;
-
-    // Give the Taka sign a readable "Tk" stand-in in case it's missing
-    // from the embedded font; everything else is passed through as-is.
-    function sanitize(s) {
-      return String(s == null ? '' : s).replace(/৳/g, 'Tk ').replace(/\s+/g, ' ').trim();
-    }
-
-    function ensureSpace(neededHeight, onNewPage) {
-      if (y + neededHeight > pageH - marginBottom) {
-        doc.addPage();
-        y = marginTop;
-        if (onNewPage) onNewPage();
-      }
-    }
-
-    // ── Title block — pulled straight from LAST_REPORT so it always
-    // matches what's on screen ──
-    setDocFont(true); doc.setFontSize(14); doc.setTextColor(26, 92, 42);
-    doc.text('DPHE Tree Plantation Report - ' + sanitize(reportTypeLabel(LAST_REPORT.type)), marginX, y);
-    y += 18;
-    setDocFont(false); doc.setFontSize(9.5); doc.setTextColor(90, 90, 90);
-    doc.text('Scope: ' + sanitize(LAST_REPORT.scopeLabel), marginX, y); y += 13;
-    doc.text('Period: ' + sanitize(LAST_REPORT.from) + ' to ' + sanitize(LAST_REPORT.to), marginX, y); y += 20;
-
-    // A short text block (a heading like "Office-wise Plantation Register"
-    // or "<Office name> — Total Trees: n") that sits right before a table
-    // in the report markup — printed above that table in the PDF too.
-    function findHeadingBefore(tableEl) {
-      var wrapPrev = tableEl.parentElement && tableEl.parentElement.previousElementSibling;
-      if (wrapPrev && wrapPrev.tagName !== 'TABLE' && !wrapPrev.querySelector('table')) return wrapPrev;
-      var prev = tableEl.previousElementSibling;
-      if (prev && prev.tagName !== 'TABLE') return prev;
-      return null;
-    }
-
-    var tables = target.querySelectorAll('table');
-    var cellPadX = 5, cellPadY = 5, lineH = 11;
-
-    tables.forEach(function(tableEl) {
-      var heading = findHeadingBefore(tableEl);
-      if (heading) {
-        var headingText = sanitize(heading.innerText || heading.textContent);
-        if (headingText) {
-          ensureSpace(24);
-          setDocFont(true); doc.setFontSize(10.5); doc.setTextColor(26, 92, 42);
-          doc.text(headingText, marginX, y);
-          y += 16;
-        }
-      }
-
-      var theadRow = tableEl.tHead && tableEl.tHead.rows[0];
-      var headers = theadRow ? Array.from(theadRow.cells).map(function(c) { return sanitize(c.innerText); }) : [];
-      var bodyRows = [];
-      Array.from(tableEl.tBodies).forEach(function(tb) {
-        Array.from(tb.rows).forEach(function(r) {
-          bodyRows.push(Array.from(r.cells).map(function(c) { return sanitize(c.innerText); }));
-        });
-      });
-      var footRows = [];
-      if (tableEl.tFoot) {
-        Array.from(tableEl.tFoot.rows).forEach(function(r) {
-          footRows.push(Array.from(r.cells).map(function(c) { return sanitize(c.innerText); }));
-        });
-      }
-      if (!headers.length && bodyRows.length) headers = bodyRows[0].map(function() { return ''; });
-      if (!headers.length && !bodyRows.length) return; // empty table, nothing to draw
-
-      var colCount = Math.max(headers.length, (bodyRows[0] || []).length, 1);
-
-      // Column widths: measure header + a sample of body cells, clamp
-      // each between 40pt and 45% of the table width, then scale
-      // proportionally so the total is exactly usableW.
-      setDocFont(false); doc.setFontSize(8.5);
-      var rawW = [];
-      for (var c = 0; c < colCount; c++) {
-        var w = doc.getTextWidth(headers[c] || '') + 16;
-        for (var s = 0; s < Math.min(bodyRows.length, 15); s++) {
-          var firstLine = (bodyRows[s][c] || '').split(' ').slice(0, 6).join(' ');
-          w = Math.max(w, doc.getTextWidth(firstLine) + 16);
-        }
-        rawW.push(Math.max(40, Math.min(w, usableW * 0.45)));
-      }
-      var totalRaw = rawW.reduce(function(a, b) { return a + b; }, 0);
-      var colWidths = rawW.map(function(w) { return (w / totalRaw) * usableW; });
-
-      function drawHeaderRow() {
-        var rowH = lineH + cellPadY * 2;
-        ensureSpace(rowH);
-        doc.setFillColor(26, 92, 42);
-        doc.setTextColor(255, 255, 255);
-        setDocFont(true); doc.setFontSize(8.5);
-        doc.rect(marginX, y, usableW, rowH, 'F');
-        var x = marginX;
-        headers.forEach(function(h, c) {
-          var lines = doc.splitTextToSize(h, colWidths[c] - cellPadX * 2);
-          doc.text(lines, x + cellPadX, y + cellPadY + 7);
-          x += colWidths[c];
-        });
-        y += rowH;
-      }
-
-      function measureRowHeight(cells) {
-        doc.setFontSize(8.5);
-        var maxLines = 1;
-        cells.forEach(function(cellText, c) {
-          var lines = doc.splitTextToSize(cellText || '', colWidths[c] - cellPadX * 2);
-          maxLines = Math.max(maxLines, lines.length);
-        });
-        return maxLines * lineH + cellPadY * 2;
-      }
-
-      function drawDataRow(cells, opts) {
-        opts = opts || {};
-        var rowH = measureRowHeight(cells);
-        ensureSpace(rowH, headers.length ? drawHeaderRow : null);
-        if (opts.bold) { doc.setFillColor(232, 245, 233); doc.rect(marginX, y, usableW, rowH, 'F'); }
-        else if (opts.shade) { doc.setFillColor(248, 253, 248); doc.rect(marginX, y, usableW, rowH, 'F'); }
-        setDocFont(opts.bold); doc.setFontSize(8.5);
-        doc.setTextColor(40, 40, 40);
-        var x = marginX;
-        cells.forEach(function(cellText, c) {
-          var lines = doc.splitTextToSize(cellText || '', colWidths[c] - cellPadX * 2);
-          doc.text(lines, x + cellPadX, y + cellPadY + 7);
-          x += colWidths[c];
-        });
-        doc.setDrawColor(230, 230, 230);
-        var xx = marginX;
-        for (var c2 = 0; c2 < colWidths.length; c2++) { doc.rect(xx, y, colWidths[c2], rowH); xx += colWidths[c2]; }
-        y += rowH;
-      }
-
-      if (headers.length) drawHeaderRow();
-      bodyRows.forEach(function(cells, i) { drawDataRow(cells, { shade: i % 2 === 1 }); });
-      footRows.forEach(function(cells) { drawDataRow(cells, { bold: true }); });
-
-      y += 14; // gap before next table/section
+  if (LAST_REPORT.type === 'summary') {
+    var total = recs.length, alive = recs.filter(function(r){return r.status==='Alive';}).length;
+    var dead = recs.filter(function(r){return r.status==='Dead';}).length;
+    var care = recs.filter(function(r){return r.status==='Care Required';}).length;
+    var survRate = total>0?Math.round(alive/total*100):0;
+    var stats = [['Total Trees',String(total)],['Alive',String(alive)],['Dead',String(dead)],['Care Required',String(care)],['Survival Rate',survRate+'%'],['Total Cost (BDT)',fmtBDT(costSum(recs))]];
+    var boxW = (pageW - margin*2 - 5*8) / 6;
+    stats.forEach(function(s,i){
+      var x = margin + i*(boxW+8);
+      doc.setDrawColor(200,220,200); doc.setFillColor(248,253,248);
+      doc.roundedRect(x, startY, boxW, 46, 4, 4, 'FD');
+      doc.setFontSize(7.5); doc.setTextColor(120,120,120); doc.setFont(FONT,'normal');
+      doc.text(s[0], x+6, startY+16, {maxWidth: boxW-12});
+      doc.setFontSize(11); doc.setTextColor(26,92,42); doc.setFont(FONT,'bold');
+      doc.text(txt(s[1]), x+6, startY+34, {maxWidth: boxW-12});
+      doc.setFont(FONT,'normal');
+    });
+    var byOffice = {};
+    recs.forEach(function(r){ var o=officeInfo(r); if(!byOffice[o.key]) byOffice[o.key]={name:o.name,count:0}; byOffice[o.key].count++; });
+    var officeKeysSumPdf = Object.keys(byOffice).sort(compareOfficeKeys);
+    doc.autoTable({
+      startY: startY+64, margin:{left:margin,right:margin},
+      head:[['Name of the Office','Trees']], body:officeKeysSumPdf.map(function(k){ return [txt(byOffice[k].name),String(byOffice[k].count)]; }),
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:9},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:8.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
     });
 
-    var pageCount = doc.internal.getNumberOfPages();
-    for (var p = 1; p <= pageCount; p++) {
-      doc.setPage(p);
-      setDocFont(false); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-      doc.text('Page ' + p + ' / ' + pageCount, pageW - marginX - 50, pageH - 14);
-    }
+  } else if (LAST_REPORT.type === 'office') {
+    var byOffice2 = {};
+    recs.forEach(function(r) {
+      var o = officeInfo(r);
+      if (!byOffice2[o.key]) byOffice2[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, activity:{} };
+      var b = byOffice2[o.key];
+      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      var act = careActivityOf(r.remarks);
+      if (act) b.activity[act] = (b.activity[act]||0)+1;
+    });
+    var officeKeys = Object.keys(byOffice2).sort(compareOfficeKeys);
+    var body = officeKeys.map(function(k,i){
+      var b = byOffice2[k];
+      return [String(i+1), txt(b.name), String(b.count), txt(formatCategoryCounts(b.cats, SPECIES_CATEGORY_LIST)), txt(Object.keys(b.sources).join(', ')), fmtBDT(b.cost), txt(formatCategoryCounts(b.activity, CARE_ACTIVITY_LIST))];
+    });
+    var grandTrees = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].count; }, 0);
+    var grandCost = officeKeys.reduce(function(sum,k){ return sum + byOffice2[k].cost; }, 0);
+    doc.autoTable({
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Sl','Name of the Office','Trees','Species Category','Cost Source','Cost (BDT)','Care/Maintenance Activity']],
+      body:body,
+      foot:[['', 'Total', String(grandTrees), '', '', fmtBDT(grandCost), '']],
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:8},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:7.5},tableFontStyles),
+      footStyles:Object.assign({fillColor:[232,245,233],textColor:[26,92,42],fontSize:8,fontStyle:'bold'},tableFontStyles),
+      theme:'grid', styles:tableFontStyles,
+      columnStyles:{6:{cellWidth:130}},
+    });
 
-    var filename = 'dphe_' + LAST_REPORT.type + '_report_' + new Date().toISOString().split('T')[0] + '.pdf';
-    doc.save(filename);
-  } catch (err) {
-    alert('⚠️ PDF তৈরি করতে সমস্যা হয়েছে / Failed to create PDF: ' + (err && err.message || err));
-  } finally {
-    if (btnEl) { btnEl.innerHTML = origBtnText; btnEl.disabled = false; }
+  } else if (LAST_REPORT.type === 'trend') {
+    var dates = recs.map(function(r){return r.date;}).filter(Boolean).sort();
+    var body2 = [];
+    if (dates.length) {
+      var latestDate = new Date(dates[dates.length-1]);
+      for (var i=11;i>=0;i--) {
+        var d = new Date(latestDate.getFullYear(), latestDate.getMonth()-i, 1);
+        var inMonth = recs.filter(function(r){ var rd=new Date(r.date); return rd.getFullYear()===d.getFullYear() && rd.getMonth()===d.getMonth(); });
+        body2.push([d.toLocaleString('default',{month:'short'})+' '+d.getFullYear(), String(inMonth.length), fmtBDT(costSum(inMonth))]);
+      }
+    }
+    doc.autoTable({
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Month','Trees Planted','Cost (BDT)']], body:body2,
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:9},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:8.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+    });
+
+  } else if (LAST_REPORT.type === 'species_detail') {
+    var byOfficeSDp = {};
+    recs.forEach(function(r) {
+      var o = officeInfo(r);
+      if (!byOfficeSDp[o.key]) byOfficeSDp[o.key] = { name:o.name, catSpecies:{} };
+      var b = byOfficeSDp[o.key];
+      var cat = speciesCategoryOf(r.cat);
+      if (!b.catSpecies[cat]) b.catSpecies[cat] = {};
+      b.catSpecies[cat][r.species] = (b.catSpecies[cat][r.species]||0)+1;
+    });
+    var officeKeysSD = Object.keys(byOfficeSDp).sort(compareOfficeKeys);
+    var pageH = doc.internal.pageSize.getHeight();
+    var cursorY = startY;
+    if (!officeKeysSD.length) {
+      doc.setFontSize(10); doc.setTextColor(150,150,150); doc.setFont(FONT,'normal');
+      doc.text('No data', margin, cursorY+10);
+    }
+    officeKeysSD.forEach(function(k){
+      var b = byOfficeSDp[k];
+      var officeTotal = 0;
+      var body = [];
+      var catRowIdx = {};
+      SPECIES_CATEGORY_LIST.filter(function(c){ return b.catSpecies[c]; }).forEach(function(c){
+        var catTotal = Object.keys(b.catSpecies[c]).reduce(function(s,sp){ return s + b.catSpecies[c][sp]; }, 0);
+        officeTotal += catTotal;
+        catRowIdx[body.length] = true;
+        body.push([txt(c), String(catTotal)]);
+        Object.keys(b.catSpecies[c]).sort().forEach(function(sp){
+          body.push(['     ' + txt(sp), String(b.catSpecies[c][sp])]);
+        });
+      });
+      // Office title bar — page-break first if it won't fit
+      if (cursorY + 44 > pageH - margin) { doc.addPage(); cursorY = margin; }
+      doc.setFillColor(26,92,42);
+      doc.rect(margin, cursorY, pageW - margin*2, 20, 'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(9.5); doc.setFont(FONT,'bold');
+      doc.text(txt(b.name) + ' — Total Trees: ' + officeTotal, margin+8, cursorY+14, {maxWidth: pageW-margin*2-16});
+      doc.setFont(FONT,'normal');
+      cursorY += 24;
+      doc.autoTable({
+        startY: cursorY, margin:{left:margin,right:margin},
+        head:[['Species Category / Species','Count']], body:body,
+        headStyles:Object.assign({fillColor:[200,225,200],textColor:[26,92,42],fontSize:8},tableFontStyles),
+        bodyStyles:Object.assign({fontSize:7.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+        columnStyles:{1:{cellWidth:70,halign:'center'}},
+        didParseCell: function(data){
+          if (data.section === 'body' && catRowIdx[data.row.index]) {
+            data.cell.styles.fillColor = [232,245,233];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      });
+      cursorY = doc.lastAutoTable.finalY + 16;
+    });
+
+  } else if (LAST_REPORT.type === 'species_summary') {
+    var bySpeciesPdf = {};
+    recs.forEach(function(r){
+      if (!bySpeciesPdf[r.species]) bySpeciesPdf[r.species] = { species:r.species, cat:speciesCategoryOf(r.cat), total:0, alive:0 };
+      bySpeciesPdf[r.species].total++;
+      if (r.status === 'Alive') bySpeciesPdf[r.species].alive++;
+    });
+    var listPdf = Object.keys(bySpeciesPdf).map(function(k){ return bySpeciesPdf[k]; })
+      .sort(function(a,b){ return b.total - a.total || a.species.localeCompare(b.species); });
+    var bodySS = listPdf.map(function(s,i){
+      var pct = s.total>0?Math.round(s.alive/s.total*100):0;
+      return [String(i+1), txt(s.species), s.cat, String(s.total), String(s.alive), pct+'%'];
+    });
+    doc.autoTable({
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['Sl','Species','Category','Total Planted','Alive','Survival %']], body:bodySS,
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:9},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:8.5},tableFontStyles), theme:'grid', styles:tableFontStyles,
+    });
+
+  } else { // detailed
+    var body3 = recs.map(function(r){ return [r.id, r.date, r.div||'—', r.dis||'—', r.upa||'—', txt(r.species), r.status, fmtBDT(parseFloat(r.cost)||0)]; });
+    doc.autoTable({
+      startY:startY, margin:{left:margin,right:margin},
+      head:[['ID','Date','Circle','District','Upazilla','Species','Status','Cost (BDT)']], body:body3,
+      headStyles:Object.assign({fillColor:[26,92,42],textColor:255,fontSize:8},tableFontStyles),
+      bodyStyles:Object.assign({fontSize:7},tableFontStyles), theme:'striped', styles:tableFontStyles,
+    });
   }
+
+  var pageCount = doc.internal.getNumberOfPages();
+  for (var p=1;p<=pageCount;p++) {
+    doc.setPage(p);
+    doc.setFont(FONT,'normal');
+    doc.setFontSize(8); doc.setTextColor(160,160,160);
+    doc.text('Page ' + p + ' of ' + pageCount + ' — DPHE Tree Tracker', margin, doc.internal.pageSize.getHeight()-20);
+  }
+
+  doc.save('dphe_' + LAST_REPORT.type + '_report_' + new Date().toISOString().split('T')[0] + '.pdf');
 }
 
 
