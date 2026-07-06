@@ -3724,10 +3724,15 @@ async function ensureBanglaFont(doc) {
     NOTO_BENGALI_B64.normal = pair[0];
     NOTO_BENGALI_B64.bold = pair[1];
   }
+  // Registered as two entirely separate font families (NotoBengaliRegular /
+  // NotoBengaliBold) rather than one family with 'normal'/'bold' styles —
+  // sharing one family name across two different embedded TTFs was
+  // corrupting letter glyph lookups (digits kept working, letters went
+  // blank) in testing. Two independent names sidesteps that.
   doc.addFileToVFS('NotoSansBengali-Regular.ttf', NOTO_BENGALI_B64.normal);
-  doc.addFont('NotoSansBengali-Regular.ttf', 'NotoBengali', 'normal');
+  doc.addFont('NotoSansBengali-Regular.ttf', 'NotoBengaliRegular', 'normal');
   doc.addFileToVFS('NotoSansBengali-Bold.ttf', NOTO_BENGALI_B64.bold);
-  doc.addFont('NotoSansBengali-Bold.ttf', 'NotoBengali', 'bold');
+  doc.addFont('NotoSansBengali-Bold.ttf', 'NotoBengaliBold', 'normal');
 }
 
 // ── PDF export — plain jsPDF, drawn directly (no html2canvas) ───────
@@ -3759,15 +3764,16 @@ async function exportReportPDF(btnEl) {
     // Try to embed a real Bangla font; if it fails (offline, blocked
     // CDN, etc.) fall back to helvetica so export still completes —
     // Bangla just won't render correctly in that fallback case.
-    var fontName = 'helvetica';
+    var fontsLoaded = false;
     try {
       await ensureBanglaFont(doc);
-      fontName = 'NotoBengali';
+      fontsLoaded = true;
     } catch (fontErr) {
       console.warn('Bangla font could not be loaded, falling back to helvetica (Bangla text will not render correctly):', fontErr);
     }
     function setDocFont(bold) {
-      doc.setFont(fontName, bold ? 'bold' : 'normal');
+      if (fontsLoaded) { doc.setFont(bold ? 'NotoBengaliBold' : 'NotoBengaliRegular', 'normal'); }
+      else { doc.setFont('helvetica', bold ? 'bold' : 'normal'); }
     }
 
     var pageW = doc.internal.pageSize.getWidth();
