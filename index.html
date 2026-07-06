@@ -3688,30 +3688,46 @@ function exportReportCSV() {
 // jsPDF's built-in fonts (helvetica etc.) have zero Bengali glyphs, which
 // is why Bangla text and even the English *inside the same string* came
 // out as garbled symbols earlier — the standard font has no mapping for
-// those code points at all. Fix: fetch the actual SolaimanLipi.ttf and
-// embed it into the PDF via jsPDF's VFS, then draw every string with it
-// instead of helvetica. Loaded once and cached — every export after the
+// those code points at all. Fix: fetch Noto Sans Bengali (Regular AND
+// Bold — unlike SolaimanLipi, this family actually ships a real bold
+// weight, and Google builds it with the standard Latin glyph set merged
+// in, so plain English cells look right too) and embed both into the
+// PDF via jsPDF's VFS. Loaded once and cached — every export after the
 // first is instant. Shaping still isn't perfect (jsPDF has no complex-
 // script engine, so some conjuncts/vowel signs may look slightly off),
 // but real glyphs from a real Bangla font is a world away from mojibake.
-var SOLAIMAN_LIPI_B64 = null;
-var SOLAIMAN_LIPI_URL = 'https://cdn.jsdelivr.net/gh/mirazmac/bengali-webfont-cdn@master/solaimanlipi/SolaimanLipiNormal.ttf';
+var NOTO_BENGALI_B64 = { normal: null, bold: null };
+var NOTO_BENGALI_URLS = {
+  normal: 'https://cdn.jsdelivr.net/gh/notofonts/noto-sans-bengali@main/unhinted/ttf/NotoSansBengali-Regular.ttf',
+  bold: 'https://cdn.jsdelivr.net/gh/notofonts/noto-sans-bengali@main/unhinted/ttf/NotoSansBengali-Bold.ttf'
+};
+
+async function fetchFontBase64(url) {
+  var res = await fetch(url);
+  if (!res.ok) throw new Error('Font fetch failed: HTTP ' + res.status);
+  var buf = await res.arrayBuffer();
+  var bytes = new Uint8Array(buf);
+  var binary = '';
+  var chunkSize = 0x8000;
+  for (var i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
 
 async function ensureBanglaFont(doc) {
-  if (!SOLAIMAN_LIPI_B64) {
-    var res = await fetch(SOLAIMAN_LIPI_URL);
-    if (!res.ok) throw new Error('Font fetch failed: HTTP ' + res.status);
-    var buf = await res.arrayBuffer();
-    var bytes = new Uint8Array(buf);
-    var binary = '';
-    var chunkSize = 0x8000;
-    for (var i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-    }
-    SOLAIMAN_LIPI_B64 = btoa(binary);
+  if (!NOTO_BENGALI_B64.normal || !NOTO_BENGALI_B64.bold) {
+    var pair = await Promise.all([
+      fetchFontBase64(NOTO_BENGALI_URLS.normal),
+      fetchFontBase64(NOTO_BENGALI_URLS.bold)
+    ]);
+    NOTO_BENGALI_B64.normal = pair[0];
+    NOTO_BENGALI_B64.bold = pair[1];
   }
-  doc.addFileToVFS('SolaimanLipi.ttf', SOLAIMAN_LIPI_B64);
-  doc.addFont('SolaimanLipi.ttf', 'SolaimanLipi', 'normal');
+  doc.addFileToVFS('NotoSansBengali-Regular.ttf', NOTO_BENGALI_B64.normal);
+  doc.addFont('NotoSansBengali-Regular.ttf', 'NotoBengali', 'normal');
+  doc.addFileToVFS('NotoSansBengali-Bold.ttf', NOTO_BENGALI_B64.bold);
+  doc.addFont('NotoSansBengali-Bold.ttf', 'NotoBengali', 'bold');
 }
 
 // ── PDF export — plain jsPDF, drawn directly (no html2canvas) ───────
@@ -3746,15 +3762,12 @@ async function exportReportPDF(btnEl) {
     var fontName = 'helvetica';
     try {
       await ensureBanglaFont(doc);
-      fontName = 'SolaimanLipi';
+      fontName = 'NotoBengali';
     } catch (fontErr) {
       console.warn('Bangla font could not be loaded, falling back to helvetica (Bangla text will not render correctly):', fontErr);
     }
-    // SolaimanLipi is only registered as a single "normal" weight — there's
-    // no bold face to switch to, so headers/emphasis lean on background
-    // color instead of font-weight when this font is active.
     function setDocFont(bold) {
-      doc.setFont(fontName, (fontName === 'helvetica' && bold) ? 'bold' : 'normal');
+      doc.setFont(fontName, bold ? 'bold' : 'normal');
     }
 
     var pageW = doc.internal.pageSize.getWidth();
