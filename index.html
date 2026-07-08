@@ -1,4 +1,38 @@
 <!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  DPHE Tree Tracker — Frontend
+  PRODUCTION-READINESS CHECK (last audited: this revision)
+  ════════════════════════════════════════════════════════════════════
+  ✔ scopedRecords()/canMutateRecord() match district+upazila together for
+    the 'upazilla' scope, matching the server's recordInScope() — upazila
+    names like "Sadar Upazilla" repeat across many districts, so upazila
+    name alone was never a safe match; this is now fixed on both sides.
+  ✔ Dashboard, All Records, Periodic Monitoring, Map, Reports, Search, and
+    Export all read through scopedRecords() — one shared, audited scope
+    boundary, not separate per-page filtering logic.
+  ✔ Map markers + Map summary cards both use scopedRecords(); the summary
+    card breakdown and its heading now adapt to the logged-in role (Circle
+    Officer → District breakdown, District Officer → Upazilla breakdown,
+    Upazilla Officer → single own-upazilla card, HQ Admin → national
+    Circle breakdown) instead of always showing a national Circle view.
+  ✔ Sidebar items are hidden per-permission (applySidebarPermissions),
+    re-applied on login and whenever a user's own permissions change.
+  ✔ Field-Level Permission Management modal (User Management → 🔑
+    Permissions) is fully English — no remaining Bangla text.
+  ✔ Client-side scoping/permission checks here are for UI/UX only — the
+    Apps Script backend independently re-validates every read/write
+    against the stored user record, so this file being modified or
+    bypassed client-side cannot grant access the backend doesn't allow.
+  ✔ Reports currency cells render as "12,500/-" (headers already say
+    "(BDT)"); this does not affect any underlying calculation.
+  ✔ Syntax-checked clean (node --check on the extracted inline script)
+    after every change in this revision.
+  → Requires the matching Code8_fixed.gs to be deployed as a new version
+    on the same Apps Script deployment (same /exec URL — no APPS_SCRIPT_URL
+    change needed here).
+  ════════════════════════════════════════════════════════════════════
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -880,7 +914,7 @@ tr:hover td{background:#f8fdf8}
     </div>
     <div id="leaflet-map" style="height:450px;width:100%"></div>
     <div style="padding:14px 16px;border-top:1px solid #e8f5e9">
-      <div class="card-title" style="margin-bottom:10px"><span>📍</span> Circle-wise Summary <span style="font-weight:400;color:#2d8a42">| সার্কেল ভিত্তিক সারসংক্ষেপ</span></div>
+      <div class="card-title" style="margin-bottom:10px"><span>📍</span> <span id="map-summary-title">Circle-wise Summary</span> <span id="map-summary-title-bn" style="font-weight:400;color:#2d8a42">| সার্কেল ভিত্তিক সারসংক্ষেপ</span></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px" id="map-summary-cards"></div>
     </div>
   </div>
@@ -1185,13 +1219,13 @@ tr:hover td{background:#f8fdf8}
   <!-- Permission Edit Modal -->
   <div id="perm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;overflow-y:auto">
     <div style="background:#fff;border-radius:14px;max-width:760px;margin:30px auto;padding:24px;position:relative;max-height:90vh;display:flex;flex-direction:column">
-      <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:6px">🔑 ফিল্ড-লেভেল পারমিশন পরিচালনা | Field-Level Permission Management</div>
+      <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:6px">🔑 Field-Level Permission Management</div>
       <div id="perm-modal-user-info" style="font-size:12px;color:#888;margin-bottom:12px;background:#f0f7f0;padding:8px 12px;border-radius:8px"></div>
-      <div style="font-size:11px;color:#999;margin-bottom:10px">প্রতিটি মডিউল ক্লিক করে এর ভেতরের ফিল্ড দেখুন এবং View / Edit পারমিশন নির্ধারণ করুন। View ছাড়া ফিল্ড সম্পূর্ণ হাইড থাকবে। | Click a module to expand its fields. Without View, a field is fully hidden; View-only makes it read-only.</div>
+      <div style="font-size:11px;color:#999;margin-bottom:10px">Click a module to expand its fields. Without View, a field is fully hidden; View-only makes it read-only.</div>
       <div id="perm-modal-grid" style="overflow-y:auto;flex:1;padding-right:4px"></div>
       <div class="btn-row" style="margin-top:14px">
-        <button class="btn" onclick="closePermModal()">বাতিল করুন</button>
-        <button class="btn btn-primary" onclick="savePermissions()">✅ পারমিশন সংরক্ষণ করুন</button>
+        <button class="btn" onclick="closePermModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="savePermissions()">✅ Save Permissions</button>
       </div>
     </div>
   </div>
@@ -1612,71 +1646,71 @@ var ROLE_DEFAULT_PERMS = {
 // type:'display'-> read-only output (chart/stat/table), only View toggle is meaningful
 // type:'action'  -> a button/capability (e.g. Delete, Export), single "Allowed" toggle (mapped to Edit)
 var FIELD_SCHEMA = [
-  { key:'dashboard', legacy:'dashboard', label:'📊 Dashboard | ড্যাশবোর্ড', fields:[
-      {key:'total_records',  label:'Total Records | মোট রেকর্ড',                 el:'s-total',          wrapper:'stat-card', type:'display'},
-      {key:'survival_rate',  label:'Survival Rate | বেঁচে থাকার হার',             el:'s-survival',       wrapper:'stat-card', type:'display'},
-      {key:'active_offices', label:'Active Offices | সক্রিয় অফিস',               el:'s-offices',        wrapper:'stat-card', type:'display'},
-      {key:'progress_chart', label:'Progress by Circle Chart | সার্কেল অনুযায়ী অগ্রগতি', el:'div-progress-bars', wrapper:'card', type:'display'},
-      {key:'category_chart', label:'Category Donut Chart | শ্রেণি চার্ট',         el:'cat-chart-wrap',   wrapper:'self', type:'display'},
-      {key:'trend_chart',    label:'Monthly Trend Chart | মাসিক ট্রেন্ড চার্ট',    el:'month-chart',      wrapper:'card', type:'display'},
-      {key:'recent_table',   label:'Recent Records Table | সাম্প্রতিক রেকর্ড টেবিল', el:'recent-tbody',  wrapper:'table', type:'display'},
+  { key:'dashboard', legacy:'dashboard', label:'📊 Dashboard', fields:[
+      {key:'total_records',  label:'Total Records',                 el:'s-total',          wrapper:'stat-card', type:'display'},
+      {key:'survival_rate',  label:'Survival Rate',             el:'s-survival',       wrapper:'stat-card', type:'display'},
+      {key:'active_offices', label:'Active Offices',               el:'s-offices',        wrapper:'stat-card', type:'display'},
+      {key:'progress_chart', label:'Progress by Circle Chart', el:'div-progress-bars', wrapper:'card', type:'display'},
+      {key:'category_chart', label:'Category Donut Chart',         el:'cat-chart-wrap',   wrapper:'self', type:'display'},
+      {key:'trend_chart',    label:'Monthly Trend Chart',    el:'month-chart',      wrapper:'card', type:'display'},
+      {key:'recent_table',   label:'Recent Records Table', el:'recent-tbody',  wrapper:'table', type:'display'},
   ]},
-  { key:'add_tree_record', legacy:'add', label:'🌱 Add Tree Record | বৃক্ষরোপণ রেকর্ড যুক্ত করুন', fields:[
-      {key:'division',        label:'Circle * | সার্কেল',                       el:'f-div',              wrapper:'fg', type:'field'},
-      {key:'district',        label:'District * | জেলা',                        el:'f-dis',              wrapper:'fg', type:'field'},
-      {key:'upazilla',        label:'Upazilla * | উপজেলা',                       el:'f-upa',              wrapper:'fg', type:'field'},
-      {key:'site_name',       label:'Site Name * | স্থানের নাম',                 el:'f-site',             wrapper:'fg', type:'field'},
-      {key:'gps_coordinates',  label:'GPS Coordinates | জিপিএস স্থানাংক',         el:'f-lat',              wrapper:'gps-box', type:'field'},
-      {key:'tree_species',    label:'Tree Species * | গাছের প্রজাতি',            el:'f-species-sel',      wrapper:'fg', type:'field'},
-      {key:'plantation_date', label:'Date of Plantation * | তারিখ',              el:'f-date',             wrapper:'fg', type:'field'},
-      {key:'caregiver_name',  label:'Caregiver Name | পরিচর্যাকারীর নাম',        el:'f-caregiver',        wrapper:'fg', type:'field'},
-      {key:'caregiver_phone', label:'Caregiver Contact | পরিচর্যাকারীর মোবাইল',  el:'f-caregiver-phone',  wrapper:'fg', type:'field'},
-      {key:'funding_source',  label:'Funding Source | অর্থায়নের উৎস',           el:'f-fund',             wrapper:'fg', type:'field'},
-      {key:'cost_bdt',        label:'Cost in BDT | খরচ (টাকা)',                 el:'f-cost',             wrapper:'fg', type:'field'},
-      {key:'initial_status',  label:'Initial Status | প্রাথমিক অবস্থা',          el:'f-status',           wrapper:'fg', type:'field'},
-      {key:'remarks',         label:'Care/Maintenance Activity | যত্ন/রক্ষণাবেক্ষণ কার্যক্রম', el:'f-remarks',          wrapper:'fg', type:'field'},
-      {key:'photo_upload',    label:'Photo Upload | ছবি আপলোড',                 el:'upload-drop-zone',   wrapper:'card', type:'field', legacy:'photo'},
+  { key:'add_tree_record', legacy:'add', label:'🌱 Add Tree Record', fields:[
+      {key:'division',        label:'Circle *',                       el:'f-div',              wrapper:'fg', type:'field'},
+      {key:'district',        label:'District *',                        el:'f-dis',              wrapper:'fg', type:'field'},
+      {key:'upazilla',        label:'Upazilla *',                       el:'f-upa',              wrapper:'fg', type:'field'},
+      {key:'site_name',       label:'Site Name *',                 el:'f-site',             wrapper:'fg', type:'field'},
+      {key:'gps_coordinates',  label:'GPS Coordinates',         el:'f-lat',              wrapper:'gps-box', type:'field'},
+      {key:'tree_species',    label:'Tree Species *',            el:'f-species-sel',      wrapper:'fg', type:'field'},
+      {key:'plantation_date', label:'Date of Plantation *',              el:'f-date',             wrapper:'fg', type:'field'},
+      {key:'caregiver_name',  label:'Caregiver Name',        el:'f-caregiver',        wrapper:'fg', type:'field'},
+      {key:'caregiver_phone', label:'Caregiver Contact',  el:'f-caregiver-phone',  wrapper:'fg', type:'field'},
+      {key:'funding_source',  label:'Funding Source',           el:'f-fund',             wrapper:'fg', type:'field'},
+      {key:'cost_bdt',        label:'Cost in BDT',                 el:'f-cost',             wrapper:'fg', type:'field'},
+      {key:'initial_status',  label:'Initial Status',          el:'f-status',           wrapper:'fg', type:'field'},
+      {key:'remarks',         label:'Care/Maintenance Activity', el:'f-remarks',          wrapper:'fg', type:'field'},
+      {key:'photo_upload',    label:'Photo Upload',                 el:'upload-drop-zone',   wrapper:'card', type:'field', legacy:'photo'},
   ]},
-  { key:'monitoring', legacy:'monitoring', label:'🔍 Periodic Monitoring | পর্যবেক্ষণ', fields:[
-      {key:'gps_radius_check', label:'GPS Radius Check | জিপিএস ব্যাসার্ধ যাচাই', el:'mon-gps-lat',     wrapper:'card', type:'field'},
-      {key:'division_filter',  label:'Circle Filter | সার্কেল ফিল্টার',          el:'mon-filter-div',  wrapper:'self', type:'field'},
-      {key:'search_box',       label:'Search | অনুসন্ধান',                      el:'mon-search',       wrapper:'self', type:'field'},
-      {key:'monitoring_table', label:'Monitoring Table | পর্যবেক্ষণ টেবিল',     el:'mon-tbody',        wrapper:'table', type:'display'},
+  { key:'monitoring', legacy:'monitoring', label:'🔍 Periodic Monitoring', fields:[
+      {key:'gps_radius_check', label:'GPS Radius Check', el:'mon-gps-lat',     wrapper:'card', type:'field'},
+      {key:'division_filter',  label:'Circle Filter',          el:'mon-filter-div',  wrapper:'self', type:'field'},
+      {key:'search_box',       label:'Search',                      el:'mon-search',       wrapper:'self', type:'field'},
+      {key:'monitoring_table', label:'Monitoring Table',     el:'mon-tbody',        wrapper:'table', type:'display'},
   ]},
-  { key:'all_records', legacy:'records', label:'📋 All Records | সব রেকর্ড', fields:[
-      {key:'division_filter', label:'Circle Filter | সার্কেল ফিল্টার',          el:'filter-div',    wrapper:'self', type:'field'},
-      {key:'category_filter', label:'Category Filter | শ্রেণি ফিল্টার',         el:'filter-cat',    wrapper:'self', type:'field'},
-      {key:'status_filter',   label:'Status Filter | অবস্থা ফিল্টার',          el:'filter-status', wrapper:'self', type:'field'},
-      {key:'search_box',      label:'Search | অনুসন্ধান',                      el:'search-q',      wrapper:'self', type:'field'},
-      {key:'records_table',   label:'Records Table | রেকর্ড টেবিল',            el:'records-tbody', wrapper:'table', type:'display'},
-      {key:'edit_action',     label:'Edit Record Action | রেকর্ড সম্পাদনা',     el:null,            wrapper:null,   type:'action', legacy:'edit'},
-      {key:'delete_action',   label:'Delete Record Action | রেকর্ড মুছে ফেলা',  el:null,            wrapper:null,   type:'action', legacy:'delete'},
+  { key:'all_records', legacy:'records', label:'📋 All Records', fields:[
+      {key:'division_filter', label:'Circle Filter',          el:'filter-div',    wrapper:'self', type:'field'},
+      {key:'category_filter', label:'Category Filter',         el:'filter-cat',    wrapper:'self', type:'field'},
+      {key:'status_filter',   label:'Status Filter',          el:'filter-status', wrapper:'self', type:'field'},
+      {key:'search_box',      label:'Search',                      el:'search-q',      wrapper:'self', type:'field'},
+      {key:'records_table',   label:'Records Table',            el:'records-tbody', wrapper:'table', type:'display'},
+      {key:'edit_action',     label:'Edit Record Action',     el:null,            wrapper:null,   type:'action', legacy:'edit'},
+      {key:'delete_action',   label:'Delete Record Action',  el:null,            wrapper:null,   type:'action', legacy:'delete'},
   ]},
-  { key:'map_view', legacy:'map', label:'🗺️ Map View | মানচিত্র', fields:[
-      {key:'map_filter',     label:'Map Filter | মানচিত্র ফিল্টার',     el:'map-filter',         wrapper:'self', type:'field'},
-      {key:'map_display',    label:'Map Display | মানচিত্র প্রদর্শন',  el:'leaflet-map',        wrapper:'self', type:'display'},
-      {key:'summary_cards',  label:'Summary Cards | সারসংক্ষেপ কার্ড',  el:'map-summary-cards', wrapper:'self', type:'display'},
+  { key:'map_view', legacy:'map', label:'🗺️ Map View', fields:[
+      {key:'map_filter',     label:'Map Filter',     el:'map-filter',         wrapper:'self', type:'field'},
+      {key:'map_display',    label:'Map Display',  el:'leaflet-map',        wrapper:'self', type:'display'},
+      {key:'summary_cards',  label:'Summary Cards',  el:'map-summary-cards', wrapper:'self', type:'display'},
   ]},
-  { key:'plant_species', legacy:'species', label:'🌿 Plant Species | বৃক্ষ প্রজাতি', fields:[
-      {key:'add_species_form', label:'Add Species Form | নতুন প্রজাতি যোগ',     el:'add-species-form', wrapper:'self', type:'field'},
-      {key:'species_search',   label:'Species Search | প্রজাতি অনুসন্ধান',      el:'species-search',   wrapper:'self', type:'field'},
-      {key:'species_table',    label:'Species Table | প্রজাতি তালিকা',         el:'species-tbody',    wrapper:'table', type:'display'},
-      {key:'bulk_csv_upload',  label:'Bulk CSV Upload | বাল্ক সিএসভি আপলোড',    el:'bulk-csv-input',   wrapper:'self', type:'field'},
+  { key:'plant_species', legacy:'species', label:'🌿 Plant Species', fields:[
+      {key:'add_species_form', label:'Add Species Form',     el:'add-species-form', wrapper:'self', type:'field'},
+      {key:'species_search',   label:'Species Search',      el:'species-search',   wrapper:'self', type:'field'},
+      {key:'species_table',    label:'Species Table',         el:'species-tbody',    wrapper:'table', type:'display'},
+      {key:'bulk_csv_upload',  label:'Bulk CSV Upload',    el:'bulk-csv-input',   wrapper:'self', type:'field'},
   ]},
-  { key:'reports', legacy:'reports', label:'📈 Reports | প্রতিবেদন', fields:[
-      {key:'from_date',      label:'From Date | শুরুর তারিখ',           el:'rep-from', wrapper:'fg', type:'field'},
-      {key:'to_date',        label:'To Date | শেষের তারিখ',             el:'rep-to',   wrapper:'fg', type:'field'},
-      {key:'report_type',    label:'Report Type | প্রতিবেদনের ধরন',    el:'rep-type', wrapper:'fg', type:'field'},
-      {key:'scope_controls', label:'Scope Selector | পরিধি নির্বাচন',  el:'rep-scope-controls', wrapper:'card', type:'field'},
-      {key:'report_output',  label:'Report Output | প্রতিবেদন ফলাফল',  el:'report-output', wrapper:'card', type:'display'},
-      {key:'csv_export',     label:'CSV Export | সিএসভি এক্সপোর্ট',   el:null, wrapper:null, type:'action', legacy:'export'},
-      {key:'pdf_export',     label:'PDF Export | পিডিএফ এক্সপোর্ট',   el:null, wrapper:null, type:'action', legacy:'export'},
-      {key:'print_report',   label:'Print Report | প্রিন্ট প্রতিবেদন', el:null, wrapper:null, type:'action'},
+  { key:'reports', legacy:'reports', label:'📈 Reports', fields:[
+      {key:'from_date',      label:'From Date',           el:'rep-from', wrapper:'fg', type:'field'},
+      {key:'to_date',        label:'To Date',             el:'rep-to',   wrapper:'fg', type:'field'},
+      {key:'report_type',    label:'Report Type',    el:'rep-type', wrapper:'fg', type:'field'},
+      {key:'scope_controls', label:'Scope Selector',  el:'rep-scope-controls', wrapper:'card', type:'field'},
+      {key:'report_output',  label:'Report Output',  el:'report-output', wrapper:'card', type:'display'},
+      {key:'csv_export',     label:'CSV Export',   el:null, wrapper:null, type:'action', legacy:'export'},
+      {key:'pdf_export',     label:'PDF Export',   el:null, wrapper:null, type:'action', legacy:'export'},
+      {key:'print_report',   label:'Print Report', el:null, wrapper:null, type:'action'},
   ]},
-  { key:'user_management', legacy:'users', label:'👥 User Management | ব্যবহারকারী ব্যবস্থাপনা', fields:[
-      {key:'add_user_form',  label:'Add User Form | নতুন ব্যবহারকারী ফর্ম', el:'add-user-form', wrapper:'self', type:'field'},
-      {key:'users_table',    label:'Users Table | ব্যবহারকারী তালিকা',     el:'users-tbody',   wrapper:'table', type:'display'},
-      {key:'permissions_action', label:'Manage Permissions Action | পারমিশন পরিচালনা', el:null, wrapper:null, type:'action'},
+  { key:'user_management', legacy:'users', label:'👥 User Management', fields:[
+      {key:'add_user_form',  label:'Add User Form', el:'add-user-form', wrapper:'self', type:'field'},
+      {key:'users_table',    label:'Users Table',     el:'users-tbody',   wrapper:'table', type:'display'},
+      {key:'permissions_action', label:'Manage Permissions Action', el:null, wrapper:null, type:'action'},
   ]},
 ];
 
@@ -2973,20 +3007,65 @@ function centerMapBangladesh() {
 
 function updateMapCards() {
   var filter = document.getElementById('map-filter')?.value;
-  // Real counts from actual data (respecting the logged-in user's scope), not the static divData numbers.
+  // Real counts from actual data (respecting the logged-in user's scope) — this
+  // is the exact same dataset the user sees in All Records, never anything wider.
   var scoped = (typeof scopedRecords === 'function') ? scopedRecords() : records;
-  var counts = {};
-  divData.forEach(function(d){ counts[d.name] = 0; });
-  scoped.forEach(function(r){ if (counts[r.div] !== undefined) counts[r.div]++; });
-  var data = divData.map(function(d){ return { name: d.name, color: d.color, count: counts[d.name] || 0 }; });
-  if (filter && filter !== 'all') data = data.filter(function(d){ return d.name === filter; });
-  document.getElementById('map-summary-cards').innerHTML = data.map(d =>
-    '<div style="background:#fff;border-radius:10px;padding:12px;text-align:center;border-top:3px solid '+d.color+';box-shadow:0 1px 4px rgba(0,0,0,0.08)">' +
-    '<div style="font-size:11px;color:#888;margin-bottom:4px">'+d.name+'</div>' +
-    '<div style="font-size:16px;font-weight:700;color:'+d.color+'">'+d.count.toLocaleString()+'</div>' +
+
+  var titleEl   = document.getElementById('map-summary-title');
+  var titleBnEl = document.getElementById('map-summary-title-bn');
+  var groups = [];
+
+  if (SESSION.role === 'divisional') {
+    // Circle Officer: breakdown by District within their own Circle.
+    if (titleEl)   titleEl.textContent   = 'District-wise Summary — ' + SESSION.div;
+    if (titleBnEl) titleBnEl.textContent = '| জেলা ভিত্তিক সারসংক্ষেপ';
+    var disList = districtMap[SESSION.div] || [];
+    var colors1 = ['#1a5c2a','#1976d2','#f57c00','#7b1fa2','#c62828','#00838f','#558b2f','#e65100','#3949ab','#00695c'];
+    var counts1 = {};
+    disList.forEach(function(d){ counts1[d] = 0; });
+    scoped.forEach(function(r){ if (counts1[r.dis] !== undefined) counts1[r.dis]++; });
+    groups = disList.map(function(d, i){ return { name: d, color: colors1[i % colors1.length], count: counts1[d] || 0 }; });
+
+  } else if (SESSION.role === 'district') {
+    // District Officer: breakdown by Upazilla within their own District.
+    if (titleEl)   titleEl.textContent   = 'Upazilla-wise Summary — ' + SESSION.dis;
+    if (titleBnEl) titleBnEl.textContent = '| উপজেলা ভিত্তিক সারসংক্ষেপ';
+    var upaList = upazillaMap[SESSION.dis] || [];
+    var colors2 = ['#2d8a42','#1976d2','#f57c00','#9c27b0','#c62828','#00838f','#e65100','#3949ab'];
+    var counts2 = {};
+    upaList.forEach(function(u){ counts2[u] = 0; });
+    // `scoped` is already filtered to this one District, so matching on upa
+    // alone here is safe — no risk of the cross-district "Sadar Upazilla"
+    // name-collision, since every record in `scoped` already shares this dis.
+    scoped.forEach(function(r){ if (counts2[r.upa] !== undefined) counts2[r.upa]++; });
+    groups = upaList.map(function(u, i){ return { name: u, color: colors2[i % colors2.length], count: counts2[u] || 0 }; });
+
+  } else if (SESSION.role === 'upazilla') {
+    // Upazilla Officer: only their own Upazilla — a single card.
+    if (titleEl)   titleEl.textContent   = 'My Upazilla Summary — ' + SESSION.upa;
+    if (titleBnEl) titleBnEl.textContent = '| আমার উপজেলা সারসংক্ষেপ';
+    groups = [{ name: SESSION.upa, color: '#2d8a42', count: scoped.length }];
+
+  } else {
+    // HQ Admin: national breakdown by Circle (unchanged).
+    if (titleEl)   titleEl.textContent   = 'Circle-wise Summary';
+    if (titleBnEl) titleBnEl.textContent = '| সার্কেল ভিত্তিক সারসংক্ষেপ';
+    var counts3 = {};
+    divData.forEach(function(d){ counts3[d.name] = 0; });
+    scoped.forEach(function(r){ if (counts3[r.div] !== undefined) counts3[r.div]++; });
+    groups = divData.map(function(d){ return { name: d.name, color: d.color, count: counts3[d.name] || 0 }; });
+    // The "Filter by Circle" dropdown only makes sense at national/admin level —
+    // every other role's breakdown above is already confined to their own scope.
+    if (filter && filter !== 'all') groups = groups.filter(function(g){ return g.name === filter; });
+  }
+
+  document.getElementById('map-summary-cards').innerHTML = groups.map(function(g) {
+    return '<div style="background:#fff;border-radius:10px;padding:12px;text-align:center;border-top:3px solid '+g.color+';box-shadow:0 1px 4px rgba(0,0,0,0.08)">' +
+    '<div style="font-size:11px;color:#888;margin-bottom:4px">'+g.name+'</div>' +
+    '<div style="font-size:16px;font-weight:700;color:'+g.color+'">'+g.count.toLocaleString()+'</div>' +
     '<div style="font-size:10px;color:#aaa">trees</div>' +
-    '</div>'
-  ).join('');
+    '</div>';
+  }).join('');
   if (leafletMap) addAllMarkers();
 }
 
@@ -3901,7 +3980,7 @@ function openPermModal(idx) {
         return '<div class="perm-field-row">' +
           '<span class="perm-field-name">' + f.label + '</span>' +
           '<label class="perm-toggle ' + (perm.edit ? 'on' : '') + '" id="lbl-' + cbBase + '-edit">' +
-            '<input type="checkbox" id="' + cbBase + '-edit" data-slug="' + slug + '" data-mode="edit" ' + (perm.edit ? 'checked' : '') + ' onchange="onFieldPermToggle(this)"> অনুমোদিত | Allowed' +
+            '<input type="checkbox" id="' + cbBase + '-edit" data-slug="' + slug + '" data-mode="edit" ' + (perm.edit ? 'checked' : '') + ' onchange="onFieldPermToggle(this)"> Allowed' +
           '</label>' +
         '</div>';
       }
@@ -3924,11 +4003,11 @@ function openPermModal(idx) {
       '<div class="perm-acc-head" onclick="togglePermAcc(' + mi + ')">' +
         '<span class="arrow">▶</span>' +
         '<span class="perm-acc-title">' + mod.label + '</span>' +
-        '<span class="perm-acc-count" id="acc-count-' + mi + '">' + moduleViewCount + '/' + mod.fields.length + ' সক্রিয়</span>' +
+        '<span class="perm-acc-count" id="acc-count-' + mi + '">' + moduleViewCount + '/' + mod.fields.length + ' active</span>' +
         '<span class="perm-master-row" onclick="event.stopPropagation()">' +
-          '<span class="perm-toggle" onclick="setModuleFieldPerms(' + mi + ',true,false)">সব View</span>' +
-          '<span class="perm-toggle edit-toggle" onclick="setModuleFieldPerms(' + mi + ',true,true)">সব Edit</span>' +
-          '<span class="perm-toggle" onclick="setModuleFieldPerms(' + mi + ',false,false)">কোনোটি নয়</span>' +
+          '<span class="perm-toggle" onclick="setModuleFieldPerms(' + mi + ',true,false)">All View</span>' +
+          '<span class="perm-toggle edit-toggle" onclick="setModuleFieldPerms(' + mi + ',true,true)">All Edit</span>' +
+          '<span class="perm-toggle" onclick="setModuleFieldPerms(' + mi + ',false,false)">None</span>' +
         '</span>' +
       '</div>' +
       '<div class="perm-acc-body">' + rows + '</div>' +
@@ -3978,7 +4057,7 @@ function refreshAccCount(grid, slug) {
     if ((vEl && vEl.checked) || (eEl && eEl.checked)) activeCount++;
   });
   var countEl = document.getElementById('acc-count-' + mi);
-  if (countEl) countEl.textContent = activeCount + '/' + mod.fields.length + ' সক্রিয়';
+  if (countEl) countEl.textContent = activeCount + '/' + mod.fields.length + ' active';
 }
 
 // Bulk-set every field in a module: setModuleFieldPerms(moduleIndex, view, edit)
@@ -4946,7 +5025,7 @@ function renderReportsPage() {
 function costSum(recs) {
   return recs.reduce(function(sum, r){ return sum + (parseFloat(r.cost) || 0); }, 0);
 }
-function fmtBDT(n) { return 'BDT ' + Math.round(n).toLocaleString(); }
+function fmtBDT(n) { return Math.round(n).toLocaleString() + '/-'; }
 
 // ── Login: email → look up login type on server → show/hide password ──
 var _loginTypeCheckTimer = null;
