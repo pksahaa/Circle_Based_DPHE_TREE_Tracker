@@ -836,7 +836,9 @@ tr:hover td{background:#f8fdf8}
         <option value="Pending Check">Pending Check (যাচাই বাকি)</option>
       </select>
       <input type="text" id="search-q" placeholder="🔍 Search species, officer, upazilla..." oninput="filterRecords()">
+      <button class="btn btn-primary btn-sm" id="records-filter-btn" onclick="filterRecords()" style="padding:6px 16px">🔍 Filter</button>
     </div>
+
     <div style="overflow-x:auto">
     <table class="mon-table" style="min-width:1100px">
       <thead>
@@ -1095,7 +1097,7 @@ tr:hover td{background:#f8fdf8}
           <input type="checkbox" id="perm-delete"> 🗑️ Delete Records
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
-          <input type="checkbox" id="perm-monitoring"> 🔍 Do Monitoring
+          <input type="checkbox" id="perm-monitoring"> 🔍 Do Periodic Monitoring
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
           <input type="checkbox" id="perm-records"> 📋 View All Records
@@ -1558,7 +1560,7 @@ var PERM_DEFS = [
   {key:'add',       label:'🌱 রেকর্ড যোগ করা'},
   {key:'edit',      label:'✏️ রেকর্ড সম্পাদনা'},
   {key:'delete',    label:'🗑️ রেকর্ড মুছে ফেলা'},
-  {key:'monitoring',label:'🔍 Monitoring করা'},
+  {key:'monitoring',label:'🔍 Periodic Monitoring করা'},
   {key:'records',   label:'📋 সব রেকর্ড দেখা'},
   {key:'map',       label:'🗺️ Map দেখা'},
   {key:'species',   label:'🌿 Species পরিচালনা'},
@@ -1635,7 +1637,7 @@ var FIELD_SCHEMA = [
       {key:'remarks',         label:'Care/Maintenance Activity | যত্ন/রক্ষণাবেক্ষণ কার্যক্রম', el:'f-remarks',          wrapper:'fg', type:'field'},
       {key:'photo_upload',    label:'Photo Upload | ছবি আপলোড',                 el:'upload-drop-zone',   wrapper:'card', type:'field', legacy:'photo'},
   ]},
-  { key:'monitoring', legacy:'monitoring', label:'🔍 Monitoring | পর্যবেক্ষণ', fields:[
+  { key:'monitoring', legacy:'monitoring', label:'🔍 Periodic Monitoring | পর্যবেক্ষণ', fields:[
       {key:'gps_radius_check', label:'GPS Radius Check | জিপিএস ব্যাসার্ধ যাচাই', el:'mon-gps-lat',     wrapper:'card', type:'field'},
       {key:'division_filter',  label:'Circle Filter | সার্কেল ফিল্টার',          el:'mon-filter-div',  wrapper:'self', type:'field'},
       {key:'search_box',       label:'Search | অনুসন্ধান',                      el:'mon-search',       wrapper:'self', type:'field'},
@@ -2941,6 +2943,9 @@ function addAllMarkers() {
   leafletMarkers.forEach(m => m.remove());
   leafletMarkers = [];
   var filter = document.getElementById('map-filter')?.value || 'all';
+  // SECURITY: Map must never show trees outside the logged-in user's scope —
+  // use scopedRecords() (same boundary as Dashboard/Reports/Export), never the raw global `records`.
+  var myRecs = (typeof scopedRecords === 'function') ? scopedRecords() : records;
 
   // Circle HQ markers
   divData.filter(d => filter==='all' || d.name===filter).forEach(d => {
@@ -2950,8 +2955,8 @@ function addAllMarkers() {
     leafletMarkers.push(m);
   });
 
-  // Individual record markers
-  records.filter(r => r.lat && r.lon && (filter==='all' || r.div===filter)).forEach(r => {
+  // Individual record markers — scoped to the logged-in user's role/location
+  myRecs.filter(r => r.lat && r.lon && (filter==='all' || r.div===filter)).forEach(r => {
     var color = r.status==='Alive'?'#2d8a42':(r.status==='Dead'?'#c62828':(r.status==='Care Required'?'#f57c00':'#888'));
     var icon = L.circleMarker([parseFloat(r.lat), parseFloat(r.lon)], {
       radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
@@ -3865,7 +3870,7 @@ function toggleUserPassField() {
   } else {
     wrap.style.display = 'block';
     var lbl = document.getElementById('u-pass-label');
-    if (lbl) lbl.textContent = isEdit ? 'পাসওয়ার্ড (পরিবর্তন করতে চাইলে লিখুন)' : 'পাসওয়ার্ড *';
+    if (lbl) lbl.textContent = isEdit ? 'Password (Leave blank to keep current password)' : 'Password *';
   }
 }
 
@@ -4612,7 +4617,7 @@ function applySidebarPermissions() {
   var map = {
     'Dashboard': 'dashboard',
     'Add Tree Record': 'add',
-    'Monitoring': 'monitoring',
+    'Periodic Monitoring': 'monitoring',
     'All Records': 'records',
     'Map View': 'map',
     'Plant Species': 'species',
@@ -4798,7 +4803,7 @@ function renderReportsPage() {
 function costSum(recs) {
   return recs.reduce(function(sum, r){ return sum + (parseFloat(r.cost) || 0); }, 0);
 }
-function fmtBDT(n) { return '৳ ' + Math.round(n).toLocaleString(); }
+function fmtBDT(n) { return 'BDT ' + Math.round(n).toLocaleString(); }
 
 // ── Login: email → look up login type on server → show/hide password ──
 var _loginTypeCheckTimer = null;
@@ -5618,9 +5623,9 @@ function openEditUserModal(idx) {
 
   document.getElementById('u-edit-idx').value = idx;
   var titleEl = document.getElementById('user-form-title');
-  if (titleEl) titleEl.textContent = 'ব্যবহারকারী সম্পাদনা করুন — Edit User';
+  if (titleEl) titleEl.textContent = 'Edit User';
   var saveBtn = document.getElementById('user-form-save-btn');
-  if (saveBtn) saveBtn.innerHTML = '💾 পরিবর্তন সংরক্ষণ করুন — Save Changes';
+  if (saveBtn) saveBtn.innerHTML = '💾 Save Changes';
 
   document.getElementById('u-name').value = u.name || '';
   document.getElementById('u-email').value = u.email || '';
