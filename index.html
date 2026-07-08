@@ -891,23 +891,18 @@ tr:hover td{background:#f8fdf8}
 <!-- ─── MAP VIEW ─── -->
 <div class="page" id="page-map">
   <div class="page-header">
-    <div class="page-title">🗺️ Map View <span style="font-weight:400;color:#2d8a42">| সার্কেল ভিত্তিক বৃক্ষরোপণ</span></div>
+    <div class="page-title">🗺️ Map View <span style="font-weight:400;color:#2d8a42">| ভূমিকা-ভিত্তিক মানচিত্র</span></div>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
-    <div style="display:flex;gap:10px;padding:14px 16px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #e8f5e9">
-      <span style="font-size:12px;color:#666;font-weight:700">Filter by Circle:</span>
-      <select id="map-filter" onchange="updateMapCards()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px">
-        <option value="all">All Circles</option>
-        <option>Barishal Circle</option>
-        <option>Chattogram Circle</option>
-        <option>Chittagong Hill Tract Circle</option>
-        <option>Dhaka Circle</option>
-        <option>Faridpur Circle</option>
-        <option>Khulna Circle</option>
-        <option>Mymensingh Circle</option>
-        <option>Rajshahi Circle</option>
-        <option>Rangpur Circle</option>
-        <option>Sylhet Circle</option>
+    <div style="display:flex;gap:10px;padding:14px 16px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #e8f5e9" id="map-filter-bar">
+      <div id="map-loc-filters" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
+      <select id="map-filter-cat" onchange="updateMapCards()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px">
+        <option value="">All Categories</option>
+        <option>Fruit tree</option><option>Timber tree</option>
+        <option>Medicinal</option><option>Others</option>
+      </select>
+      <select id="map-filter-species" onchange="updateMapCards()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;max-width:180px">
+        <option value="">All Species</option>
       </select>
       <button class="btn btn-sm btn-primary" onclick="centerMapBangladesh()">🗺️ Fit Bangladesh</button>
       <span style="font-size:11px;color:#aaa">Click markers to see plantation details</span>
@@ -915,7 +910,10 @@ tr:hover td{background:#f8fdf8}
     <div id="leaflet-map" style="height:450px;width:100%"></div>
     <div style="padding:14px 16px;border-top:1px solid #e8f5e9">
       <div class="card-title" style="margin-bottom:10px"><span>📍</span> <span id="map-summary-title">Circle-wise Summary</span> <span id="map-summary-title-bn" style="font-weight:400;color:#2d8a42">| সার্কেল ভিত্তিক সারসংক্ষেপ</span></div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px" id="map-summary-cards"></div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+        <div id="map-summary-donut" style="flex:0 0 auto"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;flex:1 1 320px" id="map-summary-cards"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1687,7 +1685,7 @@ var FIELD_SCHEMA = [
       {key:'delete_action',   label:'Delete Record Action',  el:null,            wrapper:null,   type:'action', legacy:'delete'},
   ]},
   { key:'map_view', legacy:'map', label:'🗺️ Map View', fields:[
-      {key:'map_filter',     label:'Map Filter',     el:'map-filter',         wrapper:'self', type:'field'},
+      {key:'map_filter',     label:'Map Filter',     el:'map-filter-bar',     wrapper:'self', type:'field'},
       {key:'map_display',    label:'Map Display',  el:'leaflet-map',        wrapper:'self', type:'display'},
       {key:'summary_cards',  label:'Summary Cards',  el:'map-summary-cards', wrapper:'self', type:'display'},
   ]},
@@ -2973,25 +2971,146 @@ function makeLeafletIcon(color) {
   });
 }
 
+// ── Map location filter — role-based cascading picker ───────────────
+// (mirrors renderReportScopeControls()'s established pattern)
+// upazilla  → fixed to own Upazila only, nothing left to narrow
+// district  → fixed to own District; may narrow to one Upazila inside it
+// divisional→ fixed to own Circle; may narrow to a District, then Upazila
+// admin     → free pick: any Circle → any District → any Upazila
+var MAP_SCOPE = { div: '', dis: '', upa: '' };
+
+function renderMapScopeControls() {
+  var wrap = document.getElementById('map-loc-filters');
+  if (!wrap || !SESSION || !SESSION.role) return;
+  MAP_SCOPE = { div:'', dis:'', upa:'' };
+  var selStyle = 'padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px';
+  var html = '';
+
+  if (SESSION.role === 'admin') {
+    html += '<select id="map-rs-div" onchange="onMapScopeChange()" style="'+selStyle+'">' +
+      '<option value="">All Circles</option>' +
+      divData.map(function(d){ return '<option value="'+d.name+'">'+d.name+'</option>'; }).join('') + '</select>' +
+      '<select id="map-rs-dis" onchange="onMapScopeChange()" style="'+selStyle+'"><option value="">All Districts</option></select>' +
+      '<select id="map-rs-upa" onchange="onMapScopeChange()" style="'+selStyle+'"><option value="">All Upazilas</option></select>';
+  } else if (SESSION.role === 'divisional') {
+    html += '<span style="font-size:12px;color:#666;font-weight:700;padding:6px 4px">'+SESSION.div+'</span>' +
+      '<select id="map-rs-dis" onchange="onMapScopeChange()" style="'+selStyle+'"><option value="">All Districts</option>' +
+      (districtMap[SESSION.div]||[]).map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('') + '</select>' +
+      '<select id="map-rs-upa" onchange="onMapScopeChange()" style="'+selStyle+'"><option value="">All Upazilas</option></select>';
+  } else if (SESSION.role === 'district') {
+    html += '<span style="font-size:12px;color:#666;font-weight:700;padding:6px 4px">'+SESSION.dis+' District</span>' +
+      '<select id="map-rs-upa" onchange="onMapScopeChange()" style="'+selStyle+'"><option value="">All Upazilas</option>' +
+      (upazillaMap[SESSION.dis]||[]).map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('') + '</select>';
+  } else {
+    html += '<span style="font-size:12px;color:#666;font-weight:700;padding:6px 4px">'+SESSION.upa+' Upazilla</span>';
+  }
+
+  wrap.innerHTML = html;
+  populateMapSpeciesFilter();
+  onMapScopeChange();
+}
+
+function onMapScopeChange() {
+  if (SESSION.role === 'admin') {
+    var divVal = document.getElementById('map-rs-div')?.value || '';
+    var disSel = document.getElementById('map-rs-dis');
+    if (disSel) {
+      var opts = divVal ? (districtMap[divVal]||[]) : Object.keys(districtMap).reduce(function(a,k){ return a.concat(districtMap[k]); }, []);
+      var curDis = disSel.value;
+      disSel.innerHTML = '<option value="">All Districts</option>' + opts.map(function(d){ return '<option value="'+d+'">'+d+'</option>'; }).join('');
+      if (opts.indexOf(curDis) !== -1) disSel.value = curDis;
+    }
+    var disVal = document.getElementById('map-rs-dis')?.value || '';
+    var upaSel = document.getElementById('map-rs-upa');
+    if (upaSel) {
+      var uopts = disVal ? (upazillaMap[disVal]||[]) : [];
+      var curUpa = upaSel.value;
+      upaSel.innerHTML = '<option value="">All Upazilas</option>' + uopts.map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('');
+      if (uopts.indexOf(curUpa) !== -1) upaSel.value = curUpa;
+    }
+    MAP_SCOPE = { div:divVal, dis:disVal, upa:(upaSel?upaSel.value:'') };
+  } else if (SESSION.role === 'divisional') {
+    var disVal2 = document.getElementById('map-rs-dis')?.value || '';
+    var upaSel2 = document.getElementById('map-rs-upa');
+    if (upaSel2) {
+      var uopts2 = disVal2 ? (upazillaMap[disVal2]||[]) : [];
+      var curUpa2 = upaSel2.value;
+      upaSel2.innerHTML = '<option value="">All Upazilas</option>' + uopts2.map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('');
+      if (uopts2.indexOf(curUpa2) !== -1) upaSel2.value = curUpa2;
+    }
+    MAP_SCOPE = { div: SESSION.div, dis: disVal2, upa:(upaSel2?upaSel2.value:'') };
+  } else if (SESSION.role === 'district') {
+    MAP_SCOPE = { div: SESSION.div, dis: SESSION.dis, upa: (document.getElementById('map-rs-upa')?.value || '') };
+  } else {
+    MAP_SCOPE = { div: SESSION.div, dis: SESSION.dis, upa: SESSION.upa };
+  }
+  updateMapCards();
+}
+
+// Populate the Map's Species filter from TREE_LIST, grouped by category
+// (mirrors populateSpeciesDropdown()'s option-value format so it matches r.species exactly).
+function populateMapSpeciesFilter() {
+  var sel = document.getElementById('map-filter-species');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">All Species</option>';
+  var grouped = {};
+  TREE_LIST.forEach(function(t) {
+    var cat = t.cat.split(' — ')[0];
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(t);
+  });
+  Object.keys(grouped).forEach(function(cat) {
+    var og = document.createElement('optgroup');
+    og.label = cat;
+    grouped[cat].forEach(function(t) {
+      var val = t.en + ' (' + t.bn + ')';
+      og.appendChild(new Option(val, val));
+    });
+    sel.appendChild(og);
+  });
+  if (cur) sel.value = cur;
+}
+
+// Single source of truth for "what the Map should show right now":
+// scope-restricted (scopedRecords()) → narrowed by the location drill-down
+// (MAP_SCOPE) → narrowed by Category/Species. Both the markers and the
+// summary panel below always read from this exact same filtered set.
+function getMapFilteredRecords() {
+  var recs = (typeof scopedRecords === 'function') ? scopedRecords() : records;
+  if (MAP_SCOPE.upa)      recs = recs.filter(function(r){ return r.dis === MAP_SCOPE.dis && r.upa === MAP_SCOPE.upa; });
+  else if (MAP_SCOPE.dis) recs = recs.filter(function(r){ return r.dis === MAP_SCOPE.dis; });
+  else if (MAP_SCOPE.div) recs = recs.filter(function(r){ return r.div === MAP_SCOPE.div; });
+  var cat = document.getElementById('map-filter-cat')?.value || '';
+  var sp  = document.getElementById('map-filter-species')?.value || '';
+  if (cat) recs = recs.filter(function(r){ return (r.cat || '') === cat; });
+  if (sp)  recs = recs.filter(function(r){ return (r.species || '') === sp; });
+  return recs;
+}
+
 function addAllMarkers() {
   if (!leafletMap) return;
   leafletMarkers.forEach(m => m.remove());
   leafletMarkers = [];
-  var filter = document.getElementById('map-filter')?.value || 'all';
   // SECURITY: Map must never show trees outside the logged-in user's scope —
-  // use scopedRecords() (same boundary as Dashboard/Reports/Export), never the raw global `records`.
-  var myRecs = (typeof scopedRecords === 'function') ? scopedRecords() : records;
+  // getMapFilteredRecords() starts from scopedRecords() (same boundary as
+  // Dashboard/Reports/Export), never the raw global `records`.
+  var myRecs = getMapFilteredRecords();
 
-  // Circle HQ markers
-  divData.filter(d => filter==='all' || d.name===filter).forEach(d => {
+  // Circle HQ reference markers — only the Circle(s) actually in view for
+  // this role/drill-down, never markers for a Circle the user can't see data for.
+  var hqCircles = divData;
+  if (SESSION.role !== 'admin') hqCircles = divData.filter(function(d){ return d.name === SESSION.div; });
+  else if (MAP_SCOPE.div)       hqCircles = divData.filter(function(d){ return d.name === MAP_SCOPE.div; });
+  hqCircles.forEach(d => {
     var m = L.marker([d.lat, d.lon], {icon: makeLeafletIcon(d.color)})
       .addTo(leafletMap)
       .bindPopup('<b>'+d.name+'</b><br>🌳 '+d.count.toLocaleString()+' trees<br><small>Circle HQ marker</small>');
     leafletMarkers.push(m);
   });
 
-  // Individual record markers — scoped to the logged-in user's role/location
-  myRecs.filter(r => r.lat && r.lon && (filter==='all' || r.div===filter)).forEach(r => {
+  // Individual record markers — scoped + filtered exactly like All Records
+  myRecs.filter(r => r.lat && r.lon).forEach(r => {
     var color = r.status==='Alive'?'#2d8a42':(r.status==='Dead'?'#c62828':(r.status==='Care Required'?'#f57c00':'#888'));
     var icon = L.circleMarker([parseFloat(r.lat), parseFloat(r.lon)], {
       radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
@@ -3005,59 +3124,115 @@ function centerMapBangladesh() {
   if (leafletMap) leafletMap.setView([23.6850, 90.3563], 7);
 }
 
-function updateMapCards() {
-  var filter = document.getElementById('map-filter')?.value;
-  // Real counts from actual data (respecting the logged-in user's scope) — this
-  // is the exact same dataset the user sees in All Records, never anything wider.
-  var scoped = (typeof scopedRecords === 'function') ? scopedRecords() : records;
+// Half-donut (semicircle) chart via a clipped conic-gradient circle — no
+// chart library needed. Segment angles are computed in degrees (not %) so
+// they map precisely onto the visible 180° arc.
+function buildHalfDonutHTML(groups) {
+  var total = groups.reduce(function(s,g){ return s + g.count; }, 0);
+  var stopsStr;
+  if (!total) {
+    stopsStr = '#e6e6e6 0deg 180deg, transparent 180deg 360deg';
+  } else {
+    var acc = 0;
+    var parts = groups.filter(function(g){ return g.count > 0; }).map(function(g) {
+      var startDeg = acc / total * 180;
+      acc += g.count;
+      var endDeg = acc / total * 180;
+      return g.color + ' ' + startDeg.toFixed(2) + 'deg ' + endDeg.toFixed(2) + 'deg';
+    });
+    stopsStr = parts.join(', ') + ', transparent 180deg 360deg';
+  }
+  return '' +
+  '<div style="width:200px;text-align:center">' +
+    '<div style="position:relative;width:200px;height:100px;overflow:hidden;margin:0 auto">' +
+      '<div style="position:absolute;top:0;left:0;width:200px;height:200px;border-radius:50%;background:conic-gradient(from -90deg, '+stopsStr+')"></div>' +
+      '<div style="position:absolute;top:40px;left:40px;width:120px;height:120px;border-radius:50%;background:#fff"></div>' +
+    '</div>' +
+    '<div style="margin-top:-6px">' +
+      '<div style="font-size:18px;font-weight:700;color:#1a5c2a">'+total.toLocaleString()+'</div>' +
+      '<div style="font-size:10px;color:#888">total trees (filtered)</div>' +
+    '</div>' +
+  '</div>';
+}
 
+function updateMapCards() {
   var titleEl   = document.getElementById('map-summary-title');
   var titleBnEl = document.getElementById('map-summary-title-bn');
+  var filtered  = getMapFilteredRecords(); // exact same set the markers show
   var groups = [];
 
-  if (SESSION.role === 'divisional') {
-    // Circle Officer: breakdown by District within their own Circle.
-    if (titleEl)   titleEl.textContent   = 'District-wise Summary — ' + SESSION.div;
-    if (titleBnEl) titleBnEl.textContent = '| জেলা ভিত্তিক সারসংক্ষেপ';
-    var disList = districtMap[SESSION.div] || [];
-    var colors1 = ['#1a5c2a','#1976d2','#f57c00','#7b1fa2','#c62828','#00838f','#558b2f','#e65100','#3949ab','#00695c'];
-    var counts1 = {};
-    disList.forEach(function(d){ counts1[d] = 0; });
-    scoped.forEach(function(r){ if (counts1[r.dis] !== undefined) counts1[r.dis]++; });
-    groups = disList.map(function(d, i){ return { name: d, color: colors1[i % colors1.length], count: counts1[d] || 0 }; });
+  // Breakdown granularity: how far has this role/drill-down gone?
+  //   'single'   → HQ Admin/Circle/District drilled all the way to one Upazila,
+  //                or an Upazilla Officer viewing their own single Upazila
+  //   'upazila'  → showing Upazilas within one District
+  //   'district' → showing Districts within one Circle
+  //   'circle'   → showing Circles nationwide (HQ Admin only, nothing drilled)
+  var level;
+  if (SESSION.role === 'upazilla' || MAP_SCOPE.upa) level = 'single';
+  else if (MAP_SCOPE.dis) level = 'upazila';
+  else if (MAP_SCOPE.div) level = 'district';
+  else level = 'circle';
 
-  } else if (SESSION.role === 'district') {
-    // District Officer: breakdown by Upazilla within their own District.
-    if (titleEl)   titleEl.textContent   = 'Upazilla-wise Summary — ' + SESSION.dis;
+  if (level === 'single') {
+    var upaName = (SESSION.role === 'upazilla') ? SESSION.upa : MAP_SCOPE.upa;
+    if (titleEl)   titleEl.textContent   = (SESSION.role === 'upazilla' ? 'My Upazilla Summary — ' : 'Upazilla Summary — ') + upaName;
+    if (titleBnEl) titleBnEl.textContent = '| উপজেলা সারসংক্ষেপ';
+    groups = [{ name: upaName, color: '#2d8a42', count: filtered.length }];
+
+  } else if (level === 'upazila') {
+    // District Officer's own view, or a Circle/HQ user drilled into one District.
+    // District Offices can plant trees directly too (not tied to any Upazila),
+    // so that gets its own visible card — never silently dropped from the count.
+    var parentDis = MAP_SCOPE.dis;
+    if (titleEl)   titleEl.textContent   = 'Upazilla-wise Summary — ' + parentDis;
     if (titleBnEl) titleBnEl.textContent = '| উপজেলা ভিত্তিক সারসংক্ষেপ';
-    var upaList = upazillaMap[SESSION.dis] || [];
+    var upaList = upazillaMap[parentDis] || [];
     var colors2 = ['#2d8a42','#1976d2','#f57c00','#9c27b0','#c62828','#00838f','#e65100','#3949ab'];
-    var counts2 = {};
+    var counts2 = {}, directCount2 = 0;
     upaList.forEach(function(u){ counts2[u] = 0; });
-    // `scoped` is already filtered to this one District, so matching on upa
-    // alone here is safe — no risk of the cross-district "Sadar Upazilla"
-    // name-collision, since every record in `scoped` already shares this dis.
-    scoped.forEach(function(r){ if (counts2[r.upa] !== undefined) counts2[r.upa]++; });
+    // `filtered` is already narrowed to this one District, so matching on upa
+    // alone here is safe — no cross-district "Sadar Upazilla" name collision.
+    filtered.forEach(function(r) {
+      if (r.upa && counts2[r.upa] !== undefined) counts2[r.upa]++;
+      else if (!r.upa) directCount2++;
+    });
     groups = upaList.map(function(u, i){ return { name: u, color: colors2[i % colors2.length], count: counts2[u] || 0 }; });
+    groups.push({ name: '🏢 ' + parentDis + ' District Office (Direct)', color: '#607d8b', count: directCount2 });
 
-  } else if (SESSION.role === 'upazilla') {
-    // Upazilla Officer: only their own Upazilla — a single card.
-    if (titleEl)   titleEl.textContent   = 'My Upazilla Summary — ' + SESSION.upa;
-    if (titleBnEl) titleBnEl.textContent = '| আমার উপজেলা সারসংক্ষেপ';
-    groups = [{ name: SESSION.upa, color: '#2d8a42', count: scoped.length }];
+  } else if (level === 'district') {
+    // Circle Officer's own view, or HQ drilled into one Circle.
+    // Circle Offices can also plant directly (not tied to any District).
+    var parentDiv = MAP_SCOPE.div;
+    if (titleEl)   titleEl.textContent   = 'District-wise Summary — ' + parentDiv;
+    if (titleBnEl) titleBnEl.textContent = '| জেলা ভিত্তিক সারসংক্ষেপ';
+    var disList = districtMap[parentDiv] || [];
+    var colors1 = ['#1a5c2a','#1976d2','#f57c00','#7b1fa2','#c62828','#00838f','#558b2f','#e65100','#3949ab','#00695c'];
+    var counts1 = {}, directCount1 = 0;
+    disList.forEach(function(d){ counts1[d] = 0; });
+    filtered.forEach(function(r) {
+      if (r.dis && counts1[r.dis] !== undefined) counts1[r.dis]++;
+      else if (!r.dis) directCount1++;
+    });
+    groups = disList.map(function(d, i){ return { name: d, color: colors1[i % colors1.length], count: counts1[d] || 0 }; });
+    groups.push({ name: '🏢 ' + parentDiv + ' Office (Direct)', color: '#607d8b', count: directCount1 });
 
   } else {
-    // HQ Admin: national breakdown by Circle (unchanged).
+    // HQ Admin, nothing drilled — national breakdown by Circle.
+    // HQ can plant directly too (level 'hq', no Circle at all).
     if (titleEl)   titleEl.textContent   = 'Circle-wise Summary';
     if (titleBnEl) titleBnEl.textContent = '| সার্কেল ভিত্তিক সারসংক্ষেপ';
-    var counts3 = {};
+    var counts3 = {}, directCount3 = 0;
     divData.forEach(function(d){ counts3[d.name] = 0; });
-    scoped.forEach(function(r){ if (counts3[r.div] !== undefined) counts3[r.div]++; });
+    filtered.forEach(function(r) {
+      if (r.div && counts3[r.div] !== undefined) counts3[r.div]++;
+      else if (!r.div) directCount3++;
+    });
     groups = divData.map(function(d){ return { name: d.name, color: d.color, count: counts3[d.name] || 0 }; });
-    // The "Filter by Circle" dropdown only makes sense at national/admin level —
-    // every other role's breakdown above is already confined to their own scope.
-    if (filter && filter !== 'all') groups = groups.filter(function(g){ return g.name === filter; });
+    groups.push({ name: '🏢 HQ Office (Direct)', color: '#607d8b', count: directCount3 });
   }
+
+  var donutEl = document.getElementById('map-summary-donut');
+  if (donutEl) donutEl.innerHTML = buildHalfDonutHTML(groups);
 
   document.getElementById('map-summary-cards').innerHTML = groups.map(function(g) {
     return '<div style="background:#fff;border-radius:10px;padding:12px;text-align:center;border-top:3px solid '+g.color+';box-shadow:0 1px 4px rgba(0,0,0,0.08)">' +
@@ -3066,6 +3241,7 @@ function updateMapCards() {
     '<div style="font-size:10px;color:#aaa">trees</div>' +
     '</div>';
   }).join('');
+
   if (leafletMap) addAllMarkers();
 }
 
@@ -5988,7 +6164,7 @@ function showPage(id, el) {
   }
   if (id==='records') renderRecords();
   if (id==='monitoring') renderMonitoring();
-  if (id==='map') { updateMapCards(); setTimeout(function(){ initLeafletMap(); if(leafletMap) leafletMap.invalidateSize(); },100); }
+  if (id==='map') { renderMapScopeControls(); setTimeout(function(){ initLeafletMap(); if(leafletMap) leafletMap.invalidateSize(); },100); }
   if (id==='species') { renderSpeciesTable(); }
   if (id==='dashboard') { initDashboard(); }
   if (id==='reports') { renderReportsPage(); }
