@@ -2655,6 +2655,7 @@ function deleteRecord(id) {
   if (!confirm('⚠️ এই রেকর্ডটি মুছে ফেলবেন?\n\nID: '+r.id+'\nSpecies: '+r.species+'\nSite: '+r.site+'\n\nএই কাজটি পূর্বাবস্থায় ফেরানো যাবে না।')) return;
   records = records.filter(x=>x.id!==id);
   renderRecords();
+  invalidateCompareStats();
   initDashboard();
   renderMonitoring();
   apiCall('deleteRecord', {id: id}).then(function(res){
@@ -4500,6 +4501,7 @@ function saveRecord() {
     });
   }
   clearForm();
+  invalidateCompareStats();
   initDashboard();
 }
 document.addEventListener('DOMContentLoaded', function() {
@@ -4566,12 +4568,19 @@ function locLabel(r) {
 
 // ── Data access scoping ────────────────────────────────────────────
 // Returns only records this session is allowed to see/edit
+//
+// IMPORTANT: upazila names are NOT unique nationwide — almost every district
+// has an upazila literally named "Sadar Upazilla" (e.g. Rangpur's Sadar,
+// Gaibandha's Sadar, Kurigram's Sadar, etc. are all just "Sadar Upazilla").
+// Matching on r.upa alone would show a Rangpur Sadar user every OTHER
+// district's "Sadar Upazilla" records too. So the upazila scope must always
+// match district + upazila together, never upazila name alone.
 function scopedRecords() {
   switch (SESSION.role) {
     case 'admin':       return records;
     case 'divisional':  return records.filter(function(r){ return r.div === SESSION.div; });
     case 'district':    return records.filter(function(r){ return r.dis === SESSION.dis; });
-    case 'upazilla':    return records.filter(function(r){ return r.upa === SESSION.upa; });
+    case 'upazilla':    return records.filter(function(r){ return r.dis === SESSION.dis && r.upa === SESSION.upa; });
     default: return [];
   }
 }
@@ -4582,7 +4591,7 @@ function canMutateRecord(r) {
     case 'admin':      return true;
     case 'divisional': return r.div === SESSION.div;
     case 'district':   return r.dis === SESSION.dis;
-    case 'upazilla':   return r.upa === SESSION.upa;
+    case 'upazilla':   return r.dis === SESSION.dis && r.upa === SESSION.upa;
     default: return false;
   }
 }
@@ -4703,11 +4712,145 @@ function renderRoleKPIs() {
 }
 
 // ── Comparative Analytics (read-only, cross-scope) ──────────────────
+// SECURITY NOTE: actionGetAll on the server only ever returns records inside
+// the requester's own scope (by design — see recordInScope() in Code.gs), so
+// the local `records` array here never contains another region's trees once
+// a real backend is connected. That's exactly right for every other page,
+// but this Comparison card is the one place that legitimately needs sibling
+// regions' *counts* (never full record detail) to build a meaningful table.
+// So when a backend is configured, this fetches those counts from the
+// dedicated aggregate-only 'getCompareStats' action instead of trying to
+// derive them from the already-scoped local `records` array (which would
+// just show zeros for every region except the user's own).
+var COMPARE_STATS_CACHE = null;
+var COMPARE_STATS_LOADING = false;
+
 function renderCompareSection() {
   var el = document.getElementById('role-compare-section');
   if (!el) return;
   if (SESSION.role === 'admin') { el.innerHTML=''; return; } // Admin sees full dashboard already
 
+  if (!backendConfigured()) {
+    // Offline/demo mode: no server to ask for cross-scope counts, so fall back
+    // to the locally-held (full demo) records array as before.
+    renderCompareSectionFromLocalRecords(el);
+    return;
+  }
+
+  if (COMPARE_STATS_CACHE) {
+    renderCompareSectionFromStats(el, COMPARE_STATS_CACHE);
+    return;
+  }
+
+  el.innerHTML = '<div class="card dash-compare-section"><div class="card-title"><span>📊</span> Comparison</div>' +
+    '<div style="padding:14px;color:#888;font-size:13px">Loading comparison…</div></div>';
+  if (COMPARE_STATS_LOADING) return;
+  COMPARE_STATS_LOADING = true;
+  apiCall('getCompareStats').then(function(res) {
+    COMPARE_STATS_LOADING = false;
+    if (res && res.ok) {
+      COMPARE_STATS_CACHE = res;
+      renderCompareSection(); // re-render now that real data is here
+    } else {
+      el.innerHTML = '';
+    }
+  }).catch(function(){ COMPARE_STATS_LOADING = false; el.innerHTML = ''; });
+}
+
+// Invalidate the cache whenever the underlying record counts could have
+// changed, so the Comparison card never shows stale numbers.
+function invalidateCompareStats() { COMPARE_STATS_CACHE = null; }
+
+function renderCompareSectionFromStats(el, stats) {
+  var html = '<div class="card dash-compare-section">';
+
+  if (SESSION.role === 'divisional') {
+    html += '<div class="card-title"><span>📊</span> Circle Comparison — জাতীয় তুলনামূলক বিশ্লেষণ <span style="font-size:11px;color:#aaa;font-weight:400">(Read-only comparative analytics)</span></div>';
+    html += '<table class="compare-table"><thead><tr><th>#</th><th>Circle</th><th>Records</th><th>Alive</th><th>Survival %</th><th>Rank</th></tr></thead><tbody>';
+    var byName = {};
+    (stats.groups||[]).forEach(function(g){ byName[g.name] = g; });
+    var divStats = divData.map(function(d){
+      var g = byName[d.name] || {count:0, alive:0};
+      return {name:d.name,color:d.color,recs:g.count,alive:g.alive,surv:g.count>0?Math.round(g.alive/g.count*100):0};
+    }).sort(function(a,b){return b.recs-a.recs;});
+    divStats.forEach(function(d,i){
+      var isMe = d.name===SESSION.div;
+      var rankCls = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-n';
+      html += '<tr class="'+(isMe?'me-row':'')+'">'+
+        '<td><span class="rank-badge '+rankCls+'">'+(i+1)+'</span></td>'+
+        '<td>'+(isMe?'<b style="color:#1a5c2a">★ '+d.name+'</b>':d.name)+'</td>'+
+        '<td><b>'+d.recs+'</b></td><td>'+d.alive+'</td>'+
+        '<td><div style="display:flex;align-items:center;gap:6px"><div style="width:'+Math.round(d.surv*0.6)+'px;height:6px;background:#2d8a42;border-radius:3px"></div>'+d.surv+'%</div></td>'+
+        '<td><span class="rank-badge '+rankCls+'">'+(i+1)+'</span></td></tr>';
+    });
+    // National total row
+    var natRecs=(stats.nationalTotal&&stats.nationalTotal.count)||0, natAl=(stats.nationalTotal&&stats.nationalTotal.alive)||0;
+    html += '<tr style="background:#f5f5f5;font-weight:700"><td>—</td><td>🌐 National Total</td><td>'+natRecs+'</td><td>'+natAl+'</td><td>'+Math.round(natAl/Math.max(1,natRecs)*100)+'%</td><td>—</td></tr>';
+    html += '</tbody></table>';
+
+  } else if (SESSION.role === 'district') {
+    html += '<div class="card-title"><span>📊</span> District Comparison within '+SESSION.div+' <span style="font-size:11px;color:#aaa;font-weight:400">(Read-only)</span></div>';
+    var myDivDistricts = districtMap[SESSION.div] || [];
+    var byName2 = {};
+    (stats.groups||[]).forEach(function(g){ byName2[g.name] = g; });
+    var disStats = myDivDistricts.map(function(dis){
+      var g = byName2[dis] || {count:0, alive:0};
+      return {name:dis,recs:g.count,alive:g.alive,surv:g.count>0?Math.round(g.alive/g.count*100):0};
+    }).sort(function(a,b){return b.recs-a.recs;});
+    html += '<table class="compare-table"><thead><tr><th>#</th><th>District</th><th>Records</th><th>Alive</th><th>Survival %</th></tr></thead><tbody>';
+    disStats.forEach(function(d,i){
+      var isMe = d.name===SESSION.dis;
+      var rankCls = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-n';
+      html += '<tr class="'+(isMe?'me-row':'')+'">'+
+        '<td><span class="rank-badge '+rankCls+'">'+(i+1)+'</span></td>'+
+        '<td>'+(isMe?'<b style="color:#1a5c2a">★ '+d.name+'</b>':d.name)+'</td>'+
+        '<td><b>'+d.recs+'</b></td><td>'+d.alive+'</td>'+
+        '<td><div style="display:flex;align-items:center;gap:6px"><div style="width:'+Math.round(d.surv*0.6)+'px;height:6px;background:#1976d2;border-radius:3px"></div>'+d.surv+'%</div></td></tr>';
+    });
+    // Averages
+    var circleTotal = stats.circleTotal || {count:0, alive:0};
+    var natRecs2=(stats.nationalTotal&&stats.nationalTotal.count)||0, natAl2=(stats.nationalTotal&&stats.nationalTotal.alive)||0;
+    html += '<tr style="background:#e3f2fd;font-weight:600"><td>—</td><td>📊 '+SESSION.div+' Avg</td><td>'+Math.round(circleTotal.count/Math.max(1,myDivDistricts.length))+'</td><td>'+Math.round(circleTotal.alive/Math.max(1,myDivDistricts.length))+'</td><td>'+Math.round(circleTotal.alive/Math.max(1,circleTotal.count)*100)+'%</td></tr>';
+    html += '<tr style="background:#f5f5f5;font-weight:600"><td>—</td><td>🌐 National Avg</td><td>'+Math.round(natRecs2/64)+'</td><td>'+Math.round(natAl2/64)+'</td><td>'+Math.round(natAl2/Math.max(1,natRecs2)*100)+'%</td></tr>';
+    html += '</tbody></table>';
+
+  } else if (SESSION.role === 'upazilla') {
+    // Upazilla: compare with sibling upazillas in same district
+    html += '<div class="card-title"><span>📊</span> Upazilla Comparison — '+SESSION.dis+' District <span style="font-size:11px;color:#aaa;font-weight:400">(Read-only)</span></div>';
+    var myUpas = upazillaMap[SESSION.dis] || [];
+    var byName3 = {};
+    (stats.groups||[]).forEach(function(g){ byName3[g.name] = g; });
+    var upaStats = myUpas.map(function(upa){
+      var g = byName3[upa] || {count:0, alive:0};
+      return {name:upa,recs:g.count,alive:g.alive,surv:g.count>0?Math.round(g.alive/g.count*100):0};
+    }).sort(function(a,b){return b.recs-a.recs;});
+    html += '<table class="compare-table"><thead><tr><th>Rank</th><th>Upazilla</th><th>Records</th><th>Alive</th><th>Survival %</th></tr></thead><tbody>';
+    upaStats.forEach(function(u,i){
+      var isMe = u.name===SESSION.upa;
+      var rankCls = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-n';
+      html += '<tr class="'+(isMe?'me-row':'')+'">'+
+        '<td><span class="rank-badge '+rankCls+'">'+(i+1)+'</span></td>'+
+        '<td>'+(isMe?'<b style="color:#1a5c2a">★ '+u.name+'</b>':u.name)+'</td>'+
+        '<td><b>'+u.recs+'</b></td><td>'+u.alive+'</td>'+
+        '<td><div style="display:flex;align-items:center;gap:6px"><div style="width:'+Math.round(u.surv*0.6)+'px;height:6px;background:#7b1fa2;border-radius:3px"></div>'+u.surv+'%</div></td></tr>';
+    });
+    // Dist / Div / National averages
+    var districtTotal = stats.districtTotal || {count:0, alive:0};
+    var circleTotal2 = stats.circleTotal || {count:0, alive:0};
+    var natRecs3=(stats.nationalTotal&&stats.nationalTotal.count)||0, natAl3=(stats.nationalTotal&&stats.nationalTotal.alive)||0;
+    html += '<tr style="background:#f3e5f5;font-weight:600"><td>—</td><td>📊 '+SESSION.dis+' District Avg</td><td>'+Math.round(districtTotal.count/Math.max(1,myUpas.length))+'</td><td>'+Math.round(districtTotal.alive/Math.max(1,myUpas.length))+'</td><td>'+Math.round(districtTotal.alive/Math.max(1,districtTotal.count)*100)+'%</td></tr>';
+    html += '<tr style="background:#e3f2fd;font-weight:600"><td>—</td><td>📊 '+SESSION.div+' Avg</td><td>'+Math.round(circleTotal2.count/64)+'</td><td>'+Math.round(circleTotal2.alive/64)+'</td><td>'+Math.round(circleTotal2.alive/Math.max(1,circleTotal2.count)*100)+'%</td></tr>';
+    html += '<tr style="background:#f5f5f5;font-weight:600"><td>—</td><td>🌐 National Avg</td><td>'+Math.round(natRecs3/500)+'</td><td>'+Math.round(natAl3/500)+'</td><td>'+Math.round(natAl3/Math.max(1,natRecs3)*100)+'%</td></tr>';
+    html += '</tbody></table>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// Offline/demo-mode fallback (no backend configured) — identical to the
+// original client-only logic, operating on the full local demo dataset.
+function renderCompareSectionFromLocalRecords(el) {
   var html = '<div class="card dash-compare-section">';
 
   if (SESSION.role === 'divisional') {
@@ -5021,6 +5164,7 @@ function logout() {
   if (backendConfigured() && AUTH_TOKEN) { apiCall('logout', {}); }
   AUTH_TOKEN = null;
   clearSavedSession();
+  invalidateCompareStats();
   document.getElementById('login-screen').style.display = 'block';
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('login-pass').value = '';
