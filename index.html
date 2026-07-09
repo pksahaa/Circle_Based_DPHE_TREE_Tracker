@@ -690,10 +690,10 @@ tr:hover td{background:#f8fdf8}
       <div class="fg">
         <label>Funding Source <span style="font-weight:400;color:#2d8a42">| অর্থায়নের উৎস</span></label>
         <select id="f-fund">
-          <option>Government Revenue — রাজস্ব বাজেট</option>
-          <option>Development Budget — উন্নয়ন বাজেট</option>
+          <option>Government Revenue</option>
+          <option>Development Budget</option>
           <option>ADB / World Bank</option>
-          <option>Donor Funded — দাতা সংস্থা</option>
+          <option>Donor Funded</option>
           <option>Own Fund</option>
         </select>
       </div>
@@ -869,7 +869,7 @@ tr:hover td{background:#f8fdf8}
         <option value="Dead">Dead (মৃত)</option>
         <option value="Pending Check">Pending Check (যাচাই বাকি)</option>
       </select>
-      <input type="text" id="search-q" placeholder="🔍 Search species, officer, upazilla..." oninput="filterRecords()">
+      <input type="text" id="search-q" placeholder="🔍 Search Tree ID, species, upazilla, site..." oninput="filterRecords()">
       <button class="btn btn-primary btn-sm" id="records-filter-btn" onclick="filterRecords()" style="padding:6px 16px">🔍 Filter</button>
     </div>
 
@@ -910,9 +910,11 @@ tr:hover td{background:#f8fdf8}
     <div id="leaflet-map" style="height:450px;width:100%"></div>
     <div style="padding:14px 16px;border-top:1px solid #e8f5e9">
       <div class="card-title" style="margin-bottom:10px"><span>📍</span> <span id="map-summary-title">Circle-wise Summary</span> <span id="map-summary-title-bn" style="font-weight:400;color:#2d8a42">| সার্কেল ভিত্তিক সারসংক্ষেপ</span></div>
-      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
         <div id="map-summary-donut" style="flex:0 0 auto"></div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;flex:1 1 320px" id="map-summary-cards"></div>
+        <div style="flex:1 1 320px;min-width:280px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px" id="map-summary-cards"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -5612,7 +5614,7 @@ function renderRecords() {
     return (!fd || (r.div||'').toLowerCase()===fd) &&
            (!fc || r.cat.toLowerCase().includes(fc)) &&
            (!fs || r.status.toLowerCase().includes(fs)) &&
-           (!fq || r.species.toLowerCase().includes(fq) || (r.upa||'').toLowerCase().includes(fq) || r.site.toLowerCase().includes(fq));
+           (!fq || r.species.toLowerCase().includes(fq) || (r.upa||'').toLowerCase().includes(fq) || r.site.toLowerCase().includes(fq) || (r.id||'').toLowerCase().includes(fq));
   });
   document.getElementById('records-tbody').innerHTML = filtered.map(function(r) {
     var canEdit = canMutateRecord(r) && hasPerm('edit');
