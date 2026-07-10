@@ -1781,10 +1781,17 @@ function applyFieldPermissions() {
       var wrap = getFieldWrapperEl(f);
       var el = f.el ? document.getElementById(f.el) : null;
       if (!wrap) return;
+      // Remember whatever display value (e.g. 'flex') the element had
+      // BEFORE we ever touch it, so hiding/showing it later can restore
+      // that exact value instead of blanking it to '' (which falls back
+      // to the browser's default display for the tag — 'block' for a
+      // <div> — and silently breaks elements that rely on an explicit
+      // flex/grid layout, like the Map View summary cards).
+      if (wrap.dataset.origDisplay === undefined) { wrap.dataset.origDisplay = wrap.style.display || ''; }
       if (!perm.view) {
         wrap.style.display = 'none';
       } else {
-        wrap.style.display = '';
+        wrap.style.display = wrap.dataset.origDisplay;
         if (!perm.edit && el && ['INPUT','SELECT','TEXTAREA'].indexOf(el.tagName) !== -1) {
           el.disabled = true;
           el.title = 'View only — শুধুমাত্র দেখার অনুমতি';
