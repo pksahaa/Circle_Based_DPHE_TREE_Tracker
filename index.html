@@ -913,7 +913,7 @@ tr:hover td{background:#f8fdf8}
       <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
         <div id="map-summary-donut" style="flex:0 0 auto"></div>
         <div style="flex:1 1 320px;min-width:280px">
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px" id="map-summary-cards"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px" id="map-summary-cards"></div>
         </div>
       </div>
     </div>
@@ -2251,7 +2251,7 @@ function viewRecord(id) {
       '<div><span style="color:#888">Category | বিভাগ</span><br><b>' + escapeHtml(r.cat) + '</b></div>' +
       '<div><span style="color:#888">Caregiver | পরিচর্যাকারী</span><br><b>' + escapeHtml(r.caregiver || 'N/A') + '</b></div>' +
       '<div><span style="color:#888">Contact | মোবাইল</span><br><b>' + escapeHtml(r.caregiverPhone || 'N/A') + '</b></div>' +
-      '<div><span style="color:#888">Funding | অর্থায়ন</span><br><b>' + escapeHtml(r.fund || 'N/A') + '</b></div>' +
+      '<div><span style="color:#888">Funding | অর্থায়ন</span><br><b>' + escapeHtml(fundLabelOf(r.fund) || 'N/A') + '</b></div>' +
       '<div><span style="color:#888">Cost | খরচ</span><br><b>৳ ' + (r.cost || 0).toLocaleString() + '</b></div>' +
       '<div><span style="color:#888">Status | অবস্থা</span><br><span class="status-pill ' + statusClass(r.status) + '">' + statusLabel(r.status) + '</span></div>' +
       '<div><span style="color:#888">GPS</span><br><b>' + escapeHtml(r.lat || 'N/A') + ', ' + escapeHtml(r.lon || 'N/A') + '</b></div>' +
@@ -2635,7 +2635,7 @@ function editRecord(id) {
     }
     document.getElementById('f-caregiver-phone').value = r.caregiverPhone||'';
     document.getElementById('f-cost').value = (r.cost || r.cost===0) ? r.cost : '';
-    var fundSel=document.getElementById('f-fund'); if(fundSel && r.fund){ for(var fi=0;fi<fundSel.options.length;fi++){ if(fundSel.options[fi].value===r.fund || fundSel.options[fi].text===r.fund){ fundSel.selectedIndex=fi; break; } } }
+    var fundSel=document.getElementById('f-fund'); if(fundSel && r.fund){ var fundClean=fundLabelOf(r.fund); for(var fi=0;fi<fundSel.options.length;fi++){ if(fundSel.options[fi].value===fundClean || fundSel.options[fi].text===fundClean){ fundSel.selectedIndex=fi; break; } } }
     populateActivityFromRemarks(r.remarks||'');
     var st=document.getElementById('f-status'); for(var i=0;i<st.options.length;i++){if(st.options[i].value===r.status){st.selectedIndex=i;break;}}
     // Mark as editing
@@ -3237,7 +3237,7 @@ function updateMapCards() {
   if (donutEl) donutEl.innerHTML = buildHalfDonutHTML(groups);
 
   document.getElementById('map-summary-cards').innerHTML = groups.map(function(g) {
-    return '<div style="background:#fff;border-radius:10px;padding:12px;text-align:center;border-top:3px solid '+g.color+';box-shadow:0 1px 4px rgba(0,0,0,0.08)">' +
+    return '<div style="flex:1 1 140px;max-width:200px;background:#fff;border-radius:10px;padding:12px;text-align:center;border-top:3px solid '+g.color+';box-shadow:0 1px 4px rgba(0,0,0,0.08)">' +
     '<div style="font-size:11px;color:#888;margin-bottom:4px">'+g.name+'</div>' +
     '<div style="font-size:16px;font-weight:700;color:'+g.color+'">'+g.count.toLocaleString()+'</div>' +
     '<div style="font-size:10px;color:#aaa">trees</div>' +
@@ -3494,7 +3494,7 @@ function buildDetailedReport(recs) {
   var rows = recs.map(function(r){
     return '<tr><td style="font-size:11px;color:#888">'+escapeHtml(r.id)+'</td><td>'+escapeHtml(r.date)+'</td><td>'+escapeHtml(r.div||'—')+'</td><td>'+escapeHtml(r.dis||'—')+'</td><td>'+escapeHtml(r.upa||'—')+'</td><td>'+escapeHtml(r.species)+'</td>' +
       '<td><span class="status-pill '+statusClass(r.status)+'">'+statusLabel(r.status)+'</span></td>' +
-      '<td>'+escapeHtml(r.fund||'—')+'</td>' +
+      '<td>'+escapeHtml(fundLabelOf(r.fund)||'—')+'</td>' +
       '<td style="color:#6a1b9a;font-weight:600">'+fmtBDT(parseFloat(r.cost)||0)+'</td>' +
       '<td style="max-width:220px">'+escapeHtml(r.remarks||'—')+'</td></tr>';
   }).join('') || '<tr><td colspan="10" style="color:#aaa;text-align:center;padding:20px">No records match this filter</td></tr>';
@@ -3558,6 +3558,18 @@ function speciesCategoryOf(cat) {
   return SPECIES_CATEGORY_LIST.indexOf(v) !== -1 ? v : 'Others';
 }
 
+// Some older records were saved back when the Funding Source dropdown still
+// stored a combined "English — বাংলা" value (e.g. "Government Revenue —
+// রাজস্ব বাজেট"). The dropdown itself is English-only now, but legacy rows
+// in the sheet still carry the old bilingual text. This only cleans up how
+// the value is DISPLAYED (reports, tables, exports) — it never rewrites the
+// stored record, so no backend/Apps Script change is needed.
+function fundLabelOf(fund) {
+  var v = (fund || '').trim();
+  if (!v) return v;
+  return v.split(' — ')[0].trim();
+}
+
 // Returns one of CARE_ACTIVITY_LIST, or null if nothing was recorded.
 // "Others" selections are stored as "Others" or "Others: <details>" — the
 // free-text details are intentionally dropped here so the Office Register
@@ -3618,7 +3630,7 @@ function buildOfficeRegisterReport(recs) {
     var b = byOffice[o.key];
     b.count++;
     b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)] || 0) + 1;
-    b.sources[r.fund || '—'] = true;
+    b.sources[fundLabelOf(r.fund) || '—'] = true;
     b.cost += (parseFloat(r.cost) || 0);
     var act = careActivityOf(r.remarks);
     if (act) b.activity[act] = (b.activity[act] || 0) + 1;
@@ -3696,7 +3708,7 @@ function exportReportCSV() {
       var o = officeInfo(r);
       if (!byOffice[o.key]) byOffice[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, activity:{} };
       var b = byOffice[o.key];
-      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[fundLabelOf(r.fund)||'—']=true; b.cost += (parseFloat(r.cost)||0);
       var act = careActivityOf(r.remarks);
       if (act) b.activity[act] = (b.activity[act]||0)+1;
     });
@@ -3768,7 +3780,7 @@ function exportReportCSV() {
     });
   } else {
     headers = ['ID','Date','Circle','District','Upazilla','Species','Status','Fund Source','Cost (BDT)','Care/Maintenance Activity'];
-    rows = recs.map(function(r){ return [r.id, r.date, r.div||'', r.dis||'', r.upa||'', r.species, r.status, r.fund||'', Math.round(parseFloat(r.cost)||0), r.remarks||'']; });
+    rows = recs.map(function(r){ return [r.id, r.date, r.div||'', r.dis||'', r.upa||'', r.species, r.status, fundLabelOf(r.fund)||'', Math.round(parseFloat(r.cost)||0), r.remarks||'']; });
   }
 
   var csv = headers.join(',') + '\n' + rows.map(function(row){
@@ -3936,7 +3948,7 @@ async function exportReportPDF(btnEl) {
       var o = officeInfo(r);
       if (!byOffice2[o.key]) byOffice2[o.key] = { name:o.name, count:0, cats:{}, sources:{}, cost:0, activity:{} };
       var b = byOffice2[o.key];
-      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[r.fund||'—']=true; b.cost += (parseFloat(r.cost)||0);
+      b.count++; b.cats[speciesCategoryOf(r.cat)] = (b.cats[speciesCategoryOf(r.cat)]||0)+1; b.sources[fundLabelOf(r.fund)||'—']=true; b.cost += (parseFloat(r.cost)||0);
       var act = careActivityOf(r.remarks);
       if (act) b.activity[act] = (b.activity[act]||0)+1;
     });
@@ -6136,7 +6148,7 @@ function exportCSV() {
   var csv = header.join(',') + '\n' + rows.map(function(r){
     return [r.id,r.date,recLevel(r),r.div||'',r.dis||'',r.upa||'','"'+(r.site||'').replace(/"/g,'""')+'"',
       '"'+r.species+'"',r.cat,r.status,r.lat||'',r.lon||'',
-      '"'+(r.caregiver||'')+'"',r.caregiverPhone||'',r.fund||'',Math.round(parseFloat(r.cost)||0),
+      '"'+(r.caregiver||'')+'"',r.caregiverPhone||'',fundLabelOf(r.fund)||'',Math.round(parseFloat(r.cost)||0),
       '"'+(r.remarks||'').replace(/"/g,'""')+'"',(r.monitoring||[]).length].join(',');
   }).join('\n');
   var blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
