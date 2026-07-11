@@ -2055,23 +2055,53 @@ function resizeImage(file, maxBytes, callback) {
   img.onload = function() {
     URL.revokeObjectURL(url);
     var canvas = document.getElementById('resize-canvas');
+    var ctx = canvas.getContext('2d');
     var quality = 0.85;
     var scale = 1.0;
+    var minScale = 0.1;   // never shrink below 10% of the original dimensions
+    var minQuality = 0.15; // JPEG quality floor — below this, artifacts dominate
+    var attempts = 0;
+    var maxAttempts = 30; // safety cap so this can never loop forever
+    var smallestBlob = null; // best-so-far fallback if we can't hit the target
+
     var attempt = function() {
-      var w = Math.round(img.width * scale);
-      var h = Math.round(img.height * scale);
+      attempts++;
+      var w = Math.max(1, Math.round(img.width * scale));
+      var h = Math.max(1, Math.round(img.height * scale));
       canvas.width = w;
       canvas.height = h;
-      var ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob(function(blob) {
-        if (blob.size <= maxBytes || quality < 0.2) {
+        if (!smallestBlob || blob.size < smallestBlob.size) smallestBlob = blob;
+        if (blob.size <= maxBytes) {
           callback(blob, (blob.size / 1024).toFixed(0));
-        } else {
-          quality -= 0.1;
-          if (quality < 0.3) scale *= 0.85;
-          attempt();
+          return;
         }
+        if (attempts >= maxAttempts) {
+          // Give up and hand back the smallest version we managed to
+          // produce, rather than silently shipping something over the limit.
+          callback(smallestBlob, (smallestBlob.size / 1024).toFixed(0));
+          return;
+        }
+        // Step 1: ease off quality first (cheap, preserves resolution)...
+        if (quality > 0.5) {
+          quality -= 0.1;
+        } else if (scale > minScale) {
+          // Step 2: ...then shrink pixel dimensions, which cuts file size
+          // roughly quadratically — far more effective than quality alone
+          // for large source photos (e.g. modern phone camera images).
+          scale *= 0.8;
+        } else if (quality > minQuality) {
+          // Already at minimum dimensions but still too big — squeeze
+          // quality further as a last resort.
+          quality -= 0.05;
+        } else {
+          // Nothing left to reduce.
+          callback(smallestBlob, (smallestBlob.size / 1024).toFixed(0));
+          return;
+        }
+        attempt();
       }, 'image/jpeg', quality);
     };
     attempt();
