@@ -143,6 +143,8 @@ tr:hover td{background:#f8fdf8}
 .fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-family:Arial,sans-serif;outline:none;transition:border .2s;background:#fafafa}
 .fg input:focus,.fg select:focus,.fg textarea:focus{border-color:#2d8a42;background:#fff}
 .fg textarea{resize:vertical;min-height:80px}
+.fg input.field-invalid,.fg select.field-invalid,.fg textarea.field-invalid{border-color:#e53935!important;background:#fff5f5!important;box-shadow:0 0 0 2px rgba(229,57,53,.15)}
+.fg.field-invalid-wrap>label{color:#c62828!important}
 .btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #ddd;background:#fff;color:#444;font-family:Arial,sans-serif;transition:all .15s}
 .btn:hover{background:#f5f5f5}
 .btn-primary{background:#2d8a42;color:#fff;border-color:#2d8a42}
@@ -584,7 +586,7 @@ tr:hover td{background:#f8fdf8}
     <div class="page-title">🌱 Add Tree Plantation Record <span style="font-weight:400;color:#2d8a42">| নতুন বৃক্ষরোপণের তথ্য সংযুক্ত করুন</span></div>
   </div>
   <div id="add-alert-success" class="alert alert-success">✅ Record saved successfully! বৃক্ষরোপণ তথ্য সংরক্ষিত হয়েছে।</div>
-  <div id="add-alert-error" class="alert alert-error">❌ Please fill in all required fields. সকল প্রয়োজনীয় তথ্য পূরণ করুন।</div>
+  <div id="add-alert-error" class="alert alert-error">❌ Please fill in the highlighted required field(s) below before saving. নিচে লাল চিহ্নিত ঘরগুলো পূরণ করুন।</div>
 
   <!-- Location -->
   <div class="card">
@@ -633,11 +635,11 @@ tr:hover td{background:#f8fdf8}
       <div class="gps-box">
         <div class="fg">
           <label>Latitude</label>
-          <input type="text" id="f-lat" placeholder="e.g. 23.8103" readonly style="background:#f0f7f0">
+          <input type="text" id="f-lat" placeholder="e.g. 23.8103">
         </div>
         <div class="fg">
           <label>Longitude</label>
-          <input type="text" id="f-lon" placeholder="e.g. 90.4125" readonly style="background:#f0f7f0">
+          <input type="text" id="f-lon" placeholder="e.g. 90.4125">
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;padding-bottom:1px">
           <button class="btn-gps" id="btn-gps" onclick="fetchGPS()">
@@ -680,7 +682,7 @@ tr:hover td{background:#f8fdf8}
         <input type="date" id="f-date">
       </div>
       <div class="fg">
-        <label>Caregiver Name <span style="font-weight:400;color:#2d8a42">| পরিচর্যাকারীর নাম</span></label>
+        <label>Caregiver Name * <span style="font-weight:400;color:#2d8a42">| পরিচর্যাকারীর নাম</span></label>
         <input type="text" id="f-caregiver" placeholder="Name of person responsible for tree care">
       </div>
       <div class="fg">
@@ -688,7 +690,7 @@ tr:hover td{background:#f8fdf8}
         <input type="tel" id="f-caregiver-phone" placeholder="01XXXXXXXXX">
       </div>
       <div class="fg">
-        <label>Funding Source <span style="font-weight:400;color:#2d8a42">| অর্থায়নের উৎস</span></label>
+        <label>Funding Source * <span style="font-weight:400;color:#2d8a42">| অর্থায়নের উৎস</span></label>
         <select id="f-fund">
           <option>Government Revenue</option>
           <option>Development Budget</option>
@@ -698,11 +700,11 @@ tr:hover td{background:#f8fdf8}
         </select>
       </div>
       <div class="fg">
-        <label>Cost in BDT <span style="font-weight:400;color:#2d8a42">| খরচ (টাকা)</span></label>
+        <label>Cost in BDT * <span style="font-weight:400;color:#2d8a42">| খরচ (টাকা)</span></label>
         <input type="number" id="f-cost" min="0" step="1" placeholder="e.g. 500">
       </div>
       <div class="fg">
-        <label>Initial Status <span style="font-weight:400;color:#2d8a42">| প্রাথমিক অবস্থা</span></label>
+        <label>Initial Status * <span style="font-weight:400;color:#2d8a42">| প্রাথমিক অবস্থা</span></label>
         <select id="f-status">
           <option value="Alive">Alive (সতেজ)</option>
           <option value="Care Required">Care Required (যত্ন প্রয়োজন)</option>
@@ -711,7 +713,7 @@ tr:hover td{background:#f8fdf8}
         </select>
       </div>
       <div class="fg full">
-        <label>Care/Maintenance Activity <span style="font-weight:400;color:#2d8a42">| যত্ন/রক্ষণাবেক্ষণ কার্যক্রম</span></label>
+        <label>Care/Maintenance Activity * <span style="font-weight:400;color:#2d8a42">| যত্ন/রক্ষণাবেক্ষণ কার্যক্রম</span></label>
         <select id="f-activity-type" onchange="onActivityTypeChange()">
           <option value="">— Select Activity | কার্যক্রম নির্বাচন করুন —</option>
           <option value="Office Management">Office Management</option>
@@ -1893,6 +1895,8 @@ function fetchGPS() {
       var lon = pos.coords.longitude.toFixed(6);
       document.getElementById('f-lat').value = lat;
       document.getElementById('f-lon').value = lon;
+      document.getElementById('f-lat').classList.remove('field-invalid');
+      document.getElementById('f-lon').classList.remove('field-invalid');
       statusEl.className = 'gps-status gps-ok';
       statusEl.textContent = '✅ GPS fetched: ' + lat + ', ' + lon;
       btn.classList.remove('loading');
@@ -4361,6 +4365,7 @@ function syncSpeciesSearchDisplay() {
   var searchBox = document.getElementById('f-species-search');
   if (!sel || !searchBox) return;
   searchBox.value = sel.value || '';
+  if (sel.value) searchBox.classList.remove('field-invalid');
 }
 
 function closeSpeciesCombo() {
@@ -4639,6 +4644,7 @@ function filterSpeciesTable() {
 
 // Override clearForm to also reset edit state
 function clearForm() {
+  clearAddTreeFieldHighlights();
   ['f-div','f-dis','f-upa','f-site','f-lat','f-lon','f-date','f-caregiver','f-caregiver-phone','f-remarks','f-cost'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
@@ -4659,6 +4665,21 @@ function clearForm() {
 
 // saveRecord — handles both "new record" and "edit record" modes,
 // enforces add permission, and syncs to Google Sheets via apiCall().
+// ── Add Tree Record — required-field highlighting ──
+// IDs of every element that can be highlighted red when left blank. Kept as
+// one list so both "highlight the missing ones" and "clear all highlights"
+// use the same source of truth.
+var ADD_TREE_REQUIRED_HL_IDS = ['f-div','f-dis','f-upa','f-site','f-species-search','f-date','f-caregiver','f-fund','f-cost','f-status','f-activity-type','f-activity-specify'];
+function clearAddTreeFieldHighlights() {
+  ADD_TREE_REQUIRED_HL_IDS.forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.classList.remove('field-invalid');
+  });
+}
+function highlightAddTreeField(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.add('field-invalid');
+}
 function saveRecord() {
   if (typeof syncActivityRemarks === 'function') syncActivityRemarks();
   if (!hasPerm('add')) { alert('আপনার নতুন রেকর্ড যোগ করার অনুমতি নেই।'); return; }
@@ -4684,17 +4705,46 @@ function saveRecord() {
   var speciesTxt = document.getElementById('f-species')?.value || '';
   var species = speciesSel || speciesTxt;
   var date = document.getElementById('f-date').value;
+  var lat = document.getElementById('f-lat').value;
+  var lon = document.getElementById('f-lon').value;
+  var caregiver = document.getElementById('f-caregiver').value;
+  var fund = document.getElementById('f-fund').value;
+  var cost = document.getElementById('f-cost').value;
+  var statusVal = document.getElementById('f-status').value;
+  var activityType = document.getElementById('f-activity-type').value;
+  var activitySpecify = document.getElementById('f-activity-specify').value;
   // Required location fields depend on the selected Planting Level —
   // e.g. an "HQ Direct" record needs none of div/dis/upa, a "Circle Direct"
   // record needs only div, and so on.
   var needDiv = (level !== 'hq');
   var needDis = (level === 'district' || level === 'upazila');
   var needUpa = (level === 'upazila');
-  if ((needDiv && !div) || (needDis && !dis) || (needUpa && !upa) || !site || !species || !date) {
-    showAlert('add-alert-error'); return;
+  // Every field on this form is required EXCEPT Caregiver Contact and the
+  // photo upload — those two stay optional.
+  var reqFields = [
+    { need: needDiv, val: div,            hl: 'f-div' },
+    { need: needDis, val: dis,            hl: 'f-dis' },
+    { need: needUpa, val: upa,            hl: 'f-upa' },
+    { need: true,    val: site,           hl: 'f-site' },
+    { need: true,    val: species,        hl: 'f-species-search' },
+    { need: true,    val: date,           hl: 'f-date' },
+    { need: true,    val: caregiver,      hl: 'f-caregiver' },
+    { need: true,    val: fund,           hl: 'f-fund' },
+    { need: true,    val: cost,           hl: 'f-cost' },
+    { need: true,    val: statusVal,      hl: 'f-status' },
+    { need: true,    val: activityType,   hl: 'f-activity-type' },
+    { need: activityType === 'Others', val: activitySpecify, hl: 'f-activity-specify' }
+  ];
+  clearAddTreeFieldHighlights();
+  var missingIds = reqFields.filter(function(f){ return f.need && !f.val; }).map(function(f){ return f.hl; });
+  if (missingIds.length) {
+    missingIds.forEach(highlightAddTreeField);
+    var firstMissingEl = document.getElementById(missingIds[0]);
+    if (firstMissingEl) { firstMissingEl.scrollIntoView({behavior:'smooth', block:'center'}); firstMissingEl.focus(); }
+    showAlert('add-alert-error');
+    return;
   }
   var catShort = document.getElementById('f-cat').value || 'Others';
-  var statusVal = document.getElementById('f-status').value;
 
   if (editId) {
     // Update existing
@@ -4780,6 +4830,19 @@ function saveRecord() {
   invalidateCompareStats();
   initDashboard();
 }
+document.addEventListener('DOMContentLoaded', function() {
+  ['f-div','f-dis','f-upa','f-site','f-date','f-caregiver','f-fund','f-cost','f-status','f-activity-type','f-activity-specify'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    ['input','change'].forEach(function(evt){
+      el.addEventListener(evt, function(){ if (el.value) el.classList.remove('field-invalid'); });
+    });
+  });
+  var speciesSearchEl = document.getElementById('f-species-search');
+  if (speciesSearchEl) {
+    speciesSearchEl.addEventListener('input', function(){ if (speciesSearchEl.value) speciesSearchEl.classList.remove('field-invalid'); });
+  }
+});
 document.addEventListener('DOMContentLoaded', function() {
   var monDivSel = document.getElementById('mon-filter-div');
   if (monDivSel) {
