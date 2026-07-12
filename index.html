@@ -1379,6 +1379,32 @@ function apiCall(action, payload) {
   .catch(function(e){ console.warn('API error:', e); return { ok:false, error:String(e) }; });
 }
 
+// UX FIX: without this, a slow/hung network request (bad connection, Apps
+// Script cold-start, etc.) could leave the user stuck on a loading screen
+// ("Restoring session…") indefinitely with no way forward. Races the given
+// promise against a timer so the caller always gets a result within `ms`.
+function withTimeout(promise, ms) {
+  return new Promise(function(resolve) {
+    var settled = false;
+    var timer = setTimeout(function() {
+      if (settled) return;
+      settled = true;
+      resolve({ ok: false, error: 'timeout' });
+    }, ms);
+    promise.then(function(res) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(res);
+    }).catch(function() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok: false, error: 'network' });
+    });
+  });
+}
+
 // ── Full-screen loading overlay ─────────────────────────────────────
 (function(){
   var ov = document.createElement('div');
@@ -3150,7 +3176,7 @@ function addAllMarkers() {
   hqCircles.forEach(d => {
     var m = L.marker([d.lat, d.lon], {icon: makeLeafletIcon(d.color)})
       .addTo(leafletMap)
-      .bindPopup('<b>'+d.name+'</b><br>🌳 '+d.count.toLocaleString()+' trees<br><small>Circle HQ marker</small>');
+      .bindPopup('<b>'+escapeHtml(d.name)+'</b><br>🌳 '+d.count.toLocaleString()+' trees<br><small>Circle HQ marker</small>');
     leafletMarkers.push(m);
   });
 
@@ -3160,7 +3186,7 @@ function addAllMarkers() {
     var icon = L.circleMarker([parseFloat(r.lat), parseFloat(r.lon)], {
       radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
     }).addTo(leafletMap)
-      .bindPopup('<b>'+r.id+'</b><br>🌿 '+r.species+'<br>📍 '+r.upa+', '+r.dis+'<br>📅 '+r.date+'<br>Status: <b>'+statusLabel(r.status)+'</b>');
+      .bindPopup('<b>'+escapeHtml(r.id)+'</b><br>🌿 '+escapeHtml(r.species)+'<br>📍 '+escapeHtml(r.upa)+', '+escapeHtml(r.dis)+'<br>📅 '+escapeHtml(r.date)+'<br>Status: <b>'+escapeHtml(statusLabel(r.status))+'</b>');
     leafletMarkers.push(icon);
   });
 }
@@ -5495,6 +5521,9 @@ function enterAppAsUser(u) {
 
   // Remember this session locally so refreshing the page doesn't force a re-login.
   saveSessionLocally(u.email);
+
+  // SECURITY: start the idle-timeout clock now that a user is logged in.
+  resetIdleTimer();
 }
 
 // ── Session persistence across page refreshes ───────────────────────
@@ -5518,9 +5547,15 @@ function trySessionRestore() {
   if (backendConfigured()) {
     if (!saved.token) { hideLoading(); return; }
     AUTH_TOKEN = saved.token;
-    apiCall('getAll').then(function(res) {
+    withTimeout(apiCall('getAll'), 20000).then(function(res) {
       hideLoading();
-      if (!res || !res.ok) { clearSavedSession(); AUTH_TOKEN = null; return; } // token expired/invalid
+      if (!res || !res.ok) {
+        // Only clear the saved session for a genuine rejection (expired/invalid
+        // token). A timeout or network hiccup just means "try again on next
+        // load" — wiping the session here would force a needless re-login.
+        if (res && (res.error === 'timeout' || res.error === 'network')) { AUTH_TOKEN = null; return; }
+        clearSavedSession(); AUTH_TOKEN = null; return;
+      }
       if (res.records) records = res.records;
       if (res.users)   users   = res.users;
       if (res.species && res.species.length) TREE_LIST = res.species;
@@ -5545,9 +5580,42 @@ function roleKeyFromLabel(label) {
 var _origLogout2 = logout;
 function logout() {
   if (!confirm('Logout করতে চান?')) return;
+  performLogout();
+}
+
+// SECURITY: idle auto-logout. Previously a session stayed logged in
+// indefinitely on an unattended device as long as the tab stayed open —
+// the only expiry was the 6-hour server-side token TTL, regardless of
+// activity. This adds a client-side inactivity timer: after 30 minutes with
+// no mouse/keyboard/touch/scroll activity, the session is force-logged-out
+// (server token invalidated too), same as a real logout but without the
+// confirm() prompt and with an explanatory message instead.
+var IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+var idleTimer = null;
+function resetIdleTimer() {
+  if (!AUTH_TOKEN) return; // nothing to time out if not logged in
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(handleIdleTimeout, IDLE_TIMEOUT_MS);
+}
+function clearIdleTimer() {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+}
+function handleIdleTimeout() {
+  if (!AUTH_TOKEN) return;
+  performLogout();
+  try { alert('দীর্ঘক্ষণ কোনো কার্যক্রম না থাকায় নিরাপত্তার জন্য আপনাকে স্বয়ংক্রিয়ভাবে লগ-আউট করা হয়েছে। আবার লগইন করুন।'); } catch (e) {}
+}
+['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(function(evt) {
+  document.addEventListener(evt, resetIdleTimer, { passive: true });
+});
+
+// Shared logout logic used by both the manual "Logout" button and the
+// idle-timeout auto-logout above.
+function performLogout() {
   if (backendConfigured() && AUTH_TOKEN) { apiCall('logout', {}); }
   AUTH_TOKEN = null;
   clearSavedSession();
+  clearIdleTimer();
   invalidateCompareStats();
   document.getElementById('login-screen').style.display = 'block';
   document.getElementById('main-app').style.display = 'none';
