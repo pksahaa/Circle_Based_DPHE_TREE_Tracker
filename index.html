@@ -553,6 +553,7 @@ tr:hover td{background:#f8fdf8}
             <circle cx="60" cy="60" r="46" fill="none" stroke="#2d8a42" stroke-width="20" id="donut-fruit" stroke-dasharray="0 174" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
             <circle cx="60" cy="60" r="46" fill="none" stroke="#1976d2" stroke-width="20" id="donut-timber" stroke-dasharray="0 174" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
             <circle cx="60" cy="60" r="46" fill="none" stroke="#f57c00" stroke-width="20" id="donut-med" stroke-dasharray="0 174" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+            <circle cx="60" cy="60" r="46" fill="none" stroke="#e91e63" stroke-width="20" id="donut-ornamental" stroke-dasharray="0 174" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
             <circle cx="60" cy="60" r="46" fill="none" stroke="#9c27b0" stroke-width="20" id="donut-other" stroke-dasharray="0 174" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
             <text x="60" y="56" text-anchor="middle" font-size="11" fill="#666" id="donut-lbl">Scope</text>
             <text x="60" y="70" text-anchor="middle" font-size="11" font-weight="700" fill="#1a5c2a" id="donut-val">0</text>
@@ -561,6 +562,7 @@ tr:hover td{background:#f8fdf8}
             <div class="legend-item"><div class="ldot" style="background:#2d8a42"></div><span id="cat-fruit-lbl">Fruit trees — 0</span></div>
             <div class="legend-item"><div class="ldot" style="background:#1976d2"></div><span id="cat-timber-lbl">Timber trees — 0</span></div>
             <div class="legend-item"><div class="ldot" style="background:#f57c00"></div><span id="cat-med-lbl">Medicinal — 0</span></div>
+            <div class="legend-item"><div class="ldot" style="background:#e91e63"></div><span id="cat-ornamental-lbl">Ornamental — 0</span></div>
             <div class="legend-item"><div class="ldot" style="background:#9c27b0"></div><span id="cat-other-lbl">Others — 0</span></div>
           </div>
         </div>
@@ -5903,12 +5905,18 @@ function initDashboard() {
   }
 
   // ── Trees by Category — scoped donut ─────────────────────────────
-  var catCounts = {fruit:0, timber:0, med:0, other:0};
+  // BUGFIX: 'Ornamental' had no bucket of its own here, so every Ornamental
+  // record silently fell through to the 'other' catch-all below and got
+  // counted/displayed as "Others" instead of its own slice — even though
+  // SPECIES_CATEGORY_LIST and the Species master list both treat Ornamental
+  // as a distinct category. Added an explicit ornamental bucket + slice.
+  var catCounts = {fruit:0, timber:0, med:0, ornamental:0, other:0};
   myRecs.forEach(function(r) {
     var c = (r.cat||'').toLowerCase();
     if (c.includes('fruit'))   catCounts.fruit++;
     else if (c.includes('timber') || c.includes('বনজ')) catCounts.timber++;
     else if (c.includes('medi')  || c.includes('ওষু'))  catCounts.med++;
+    else if (c.includes('ornamental') || c.includes('শোভা')) catCounts.ornamental++;
     else catCounts.other++;
   });
   var total = myRecs.length || 1;
@@ -5919,20 +5927,23 @@ function initDashboard() {
   var off1 = -Math.round(catCounts.fruit/total*circumference);
   var off2 = off1 - Math.round(catCounts.timber/total*circumference);
   var off3 = off2 - Math.round(catCounts.med/total*circumference);
+  var off4 = off3 - Math.round(catCounts.ornamental/total*circumference);
   var setDA = function(id, da, offset) {
     var el = document.getElementById(id);
     if (el) { el.setAttribute('stroke-dasharray', da); el.setAttribute('stroke-dashoffset', offset); }
   };
-  setDA('donut-fruit',  dashArr(catCounts.fruit),  off0);
-  setDA('donut-timber', dashArr(catCounts.timber), off1);
-  setDA('donut-med',    dashArr(catCounts.med),    off2);
-  setDA('donut-other',  dashArr(catCounts.other),  off3);
+  setDA('donut-fruit',      dashArr(catCounts.fruit),      off0);
+  setDA('donut-timber',     dashArr(catCounts.timber),     off1);
+  setDA('donut-med',        dashArr(catCounts.med),        off2);
+  setDA('donut-ornamental', dashArr(catCounts.ornamental), off3);
+  setDA('donut-other',      dashArr(catCounts.other),      off4);
   var el_dlbl = document.getElementById('donut-lbl'); if(el_dlbl) el_dlbl.textContent = SESSION.role==='admin'?'National':'Scope';
   var el_dval = document.getElementById('donut-val'); if(el_dval) el_dval.textContent = myRecs.length;
   var pct = function(n){ return myRecs.length>0 ? ' ('+Math.round(n/myRecs.length*100)+'%)' : ''; };
   var el_cf = document.getElementById('cat-fruit-lbl');  if(el_cf)  el_cf.textContent  = 'Fruit trees — '+catCounts.fruit+pct(catCounts.fruit);
   var el_ct = document.getElementById('cat-timber-lbl'); if(el_ct)  el_ct.textContent  = 'Timber trees — '+catCounts.timber+pct(catCounts.timber);
   var el_cm = document.getElementById('cat-med-lbl');    if(el_cm)  el_cm.textContent  = 'Medicinal — '+catCounts.med+pct(catCounts.med);
+  var el_cor = document.getElementById('cat-ornamental-lbl'); if(el_cor) el_cor.textContent = 'Ornamental — '+catCounts.ornamental+pct(catCounts.ornamental);
   var el_co = document.getElementById('cat-other-lbl');  if(el_co)  el_co.textContent  = 'Others — '+catCounts.other+pct(catCounts.other);
 
   // ── Monthly trend chart — scoped, last 12 months ──────────────────
