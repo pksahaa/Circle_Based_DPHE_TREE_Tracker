@@ -4540,17 +4540,30 @@ function editSpecies(idx) {
   form.style.display = 'block';
   var saveBtn = form.querySelector('button.btn-primary');
   saveBtn.textContent = '✅ Update Species';
-  saveBtn.onclick = function() { updateSpeciesEntry(idx); };
+  // Remember the ORIGINAL English name (the row key on the backend) before
+  // the user's edits overwrite the sp-en field — needed so updateSpeciesEntry
+  // can tell the backend which existing row to update, even if the English
+  // name itself is also being changed.
+  var originalEn = t.en;
+  saveBtn.onclick = function() { updateSpeciesEntry(idx, originalEn); };
   form.scrollIntoView({behavior:'smooth'});
 }
 
-function updateSpeciesEntry(idx) {
+function updateSpeciesEntry(idx, originalEn) {
   var en = document.getElementById('sp-en').value.trim();
   var bn = document.getElementById('sp-bn').value.trim();
   var sci = document.getElementById('sp-sci').value.trim();
   var cat = document.getElementById('sp-cat').value;
   if (!en || !bn) { alert('English name and Bengali name are required'); return; }
-  TREE_LIST[idx] = {en:en, bn:bn, sci:sci, cat:cat};
+  var updatedSp = {en:en, bn:bn, sci:sci, cat:cat};
+  TREE_LIST[idx] = updatedSp;
+  // BUGFIX: this used to only update the local TREE_LIST array and never
+  // called the backend, so edits (e.g. a corrected Bangla name) showed up
+  // instantly on the device that made the change, but never reached
+  // Google Sheets and so never appeared on any other device.
+  apiCall('updateSpecies', {oldEn: originalEn || en, species: updatedSp}).then(function(res){
+    showSyncStatus(res && res.ok ? '☁️ Species updated in Sheets' : '⚠️ Sync failed', !!(res&&res.ok));
+  });
   renderSpeciesTable();
   document.getElementById('add-species-form').style.display = 'none';
   ['sp-en','sp-bn','sp-sci'].forEach(function(id){ document.getElementById(id).value=''; });
