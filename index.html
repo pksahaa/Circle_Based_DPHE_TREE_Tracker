@@ -4611,52 +4611,81 @@ function downloadSpeciesTemplate() {
   a.click();
 }
 
-// Parses raw CSV-style text (one species per line: en,bn,sci,cat) into an
-// array of new species objects, skipping a header row and any duplicates
-// already present in TREE_LIST (case-insensitive on English name).
-function parseBulkSpeciesText(text) {
+// Parses raw CSV-style text (one species per line: en,bn,sci,cat) and
+// classifies each row against the current TREE_LIST (case-insensitive match
+// on English name) into three buckets:
+//   - added:     English name not seen before → a brand new species.
+//   - updated:   English name already exists, but bn/sci/cat differ → the
+//                existing row will be corrected with this new data.
+//   - unchanged: English name exists AND every field is already identical →
+//                nothing to do, skipped.
+// IMPROVEMENT (was pure duplicate-skip before): re-running a bulk upload
+// used to silently ignore every species that already existed — even if the
+// new file had a corrected Bangla name or category for it. Now a matching
+// English name is only skipped if its data is truly identical; if the data
+// differs, it's treated as an update instead of being thrown away.
+function classifyBulkSpeciesText(text) {
   var lines = text.split('\n');
-  var toAdd = [];
+  var added = [], updated = [], unchangedCount = 0;
+  var seenInBatch = {}; // dedupe rows repeated within this same paste/file
   lines.forEach(function(line, idx) {
     line = line.trim();
     if (!line) return;
     if (idx === 0 && (line.toLowerCase().includes('english') || line.toLowerCase().includes('name'))) return;
     var parts = line.split(',').map(function(x){ return x.trim().replace(/^"|"$/g,''); });
-    if (parts.length >= 2 && parts[0] && parts[1]) {
-      var existsAlready = TREE_LIST.some(function(t){ return t.en.toLowerCase() === parts[0].toLowerCase(); }) ||
-        toAdd.some(function(t){ return t.en.toLowerCase() === parts[0].toLowerCase(); });
-      if (!existsAlready) {
-        toAdd.push({ en: parts[0], bn: parts[1], sci: parts[2] || '', cat: parts[3] || 'Others' });
-      }
+    if (parts.length < 2 || !parts[0] || !parts[1]) return;
+    var enKey = parts[0].toLowerCase();
+    if (seenInBatch[enKey]) return; // keep the first occurrence of a repeated row
+    seenInBatch[enKey] = true;
+    var sp = { en: parts[0], bn: parts[1], sci: parts[2] || '', cat: parts[3] || 'Others' };
+    var existingIdx = TREE_LIST.findIndex(function(t){ return t.en.toLowerCase() === enKey; });
+    if (existingIdx === -1) {
+      added.push(sp);
+    } else {
+      var existing = TREE_LIST[existingIdx];
+      var isSame = existing.bn === sp.bn && (existing.sci||'') === sp.sci && (existing.cat||'Others') === sp.cat;
+      if (isSame) { unchangedCount++; }
+      else { updated.push({ sp: sp, idx: existingIdx }); }
     }
   });
-  return toAdd;
+  return { added: added, updated: updated, unchangedCount: unchangedCount };
 }
 
-// Adds parsed species to the local list, renders the table, and syncs the
-// whole batch to Google Sheets in ONE request via the 'addSpeciesBulk' action
-// (falls back to per-row 'addSpecies' calls if the backend doesn't support it).
-function syncBulkSpecies(toAdd, btnEl) {
-  if (!toAdd.length) {
-    showBulkAlert('⚠️ কোনো নতুন প্রজাতি পাওয়া যায়নি (সব duplicate অথবা ফাঁকা)।');
+// Applies a classified bulk-upload result (added / updated / unchanged) to
+// TREE_LIST, syncs the added+updated rows to Google Sheets in ONE request
+// via 'addSpeciesBulk' (which upserts by English name on the backend, so it
+// naturally handles corrections to existing species too — not just brand-new
+// ones), and shows a clear 3-way summary instead of one vague success count.
+function syncBulkSpecies(classified, btnEl) {
+  var added = classified.added, updated = classified.updated, unchangedCount = classified.unchangedCount;
+  if (!added.length && !updated.length) {
+    showBulkAlert('ℹ️ কোনো নতুন বা পরিবর্তিত প্রজাতি পাওয়া যায়নি (' + unchangedCount + ' টি আগে থেকেই একই আছে)।');
     return;
   }
-  TREE_LIST.push.apply(TREE_LIST, toAdd);
+
+  // Apply locally first so the table reflects the change instantly.
+  added.forEach(function(sp){ TREE_LIST.push(sp); });
+  updated.forEach(function(u){ TREE_LIST[u.idx] = u.sp; });
   renderSpeciesTable();
-  showBulkAlert('✅ ' + toAdd.length + ' new species added — syncing to Google Sheets…');
+
+  var summaryPrefix = added.length + ' নতুন, ' + updated.length + ' পরিবর্তিত (updated), ' + unchangedCount + ' অপরিবর্তিত — ';
+  showBulkAlert('⏳ ' + summaryPrefix + 'syncing to Google Sheets…');
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Syncing…'; }
 
-  apiCall('addSpeciesBulk', { species: toAdd }).then(function(res) {
+  var payload = added.concat(updated.map(function(u){ return u.sp; }));
+
+  apiCall('addSpeciesBulk', { species: payload }).then(function(res) {
     if (res && res.ok) {
-      showBulkAlert('☁️ ' + toAdd.length + ' species saved to Google Sheets successfully!');
-      showSyncStatus('☁️ Bulk species saved to Google Sheets', true);
+      showBulkAlert('☁️ ' + summaryPrefix + 'saved to Google Sheets!');
+      showSyncStatus('☁️ Bulk species synced to Google Sheets', true);
     } else {
-      // Backend may not have the bulk action yet — fall back to one-by-one.
-      var calls = toAdd.map(function(sp) { return apiCall('addSpecies', { species: sp }); });
+      // Backend may not have the bulk action yet — fall back to one-by-one
+      // (addSpecies also upserts by English name, so updates still work here).
+      var calls = payload.map(function(sp) { return apiCall('addSpecies', { species: sp }); });
       Promise.all(calls).then(function(results) {
         var okCount = results.filter(function(r){ return r && r.ok; }).length;
-        showBulkAlert('☁️ ' + okCount + ' / ' + toAdd.length + ' species synced to Google Sheets.');
-        showSyncStatus(okCount === toAdd.length ? '☁️ Bulk species saved to Google Sheets' : '⚠️ Some species failed to sync', okCount === toAdd.length);
+        showBulkAlert('☁️ ' + summaryPrefix + okCount + ' / ' + payload.length + ' synced to Google Sheets.');
+        showSyncStatus(okCount === payload.length ? '☁️ Bulk species synced to Google Sheets' : '⚠️ Some species failed to sync', okCount === payload.length);
       });
     }
   }).finally(function() {
@@ -4669,8 +4698,8 @@ function bulkUploadSpecies(input) {
   if (!file) return;
   var reader = new FileReader();
   reader.onload = function(e) {
-    var toAdd = parseBulkSpeciesText(e.target.result);
-    syncBulkSpecies(toAdd, null);
+    var classified = classifyBulkSpeciesText(e.target.result);
+    syncBulkSpecies(classified, null);
     input.value = '';
   };
   reader.readAsText(file);
@@ -4684,8 +4713,8 @@ function submitBulkSpecies() {
     showBulkAlert('⚠️ অনুগ্রহ করে প্রথমে কিছু CSV ডেটা পেস্ট করুন।');
     return;
   }
-  var toAdd = parseBulkSpeciesText(text);
-  syncBulkSpecies(toAdd, document.getElementById('bulk-submit-btn'));
+  var classified = classifyBulkSpeciesText(text);
+  syncBulkSpecies(classified, document.getElementById('bulk-submit-btn'));
   if (area) area.value = '';
 }
 
