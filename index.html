@@ -4356,13 +4356,26 @@ function savePermissions() {
   if (SESSION.email === u.email) { SESSION.perms = u.perms; SESSION.fieldPerms = u.fieldPerms; applySidebarPermissions(); applyFieldPermissions(); }
   closePermModal();
   renderUsers();
-  apiCall('updateUser', { user: u }).then(function(res){
-    if (!res || !res.ok) console.warn('permissions sync failed:', res && res.error);
-  });
-  // Show success feedback
   var ss = document.getElementById('sync-status');
-  if(ss){ ss.textContent='✅ ফিল্ড-লেভেল পারমিশন সংরক্ষিত হয়েছে'; ss.style.color='#2d8a42'; ss.style.display='inline';
-    setTimeout(function(){ ss.style.display='none'; },3000); }
+  apiCall('updateUser', { user: u }).then(function(res){
+    var ok = !!(res && res.ok);
+    if (ok) {
+      // Only show success once the backend has actually confirmed the write —
+      // previously this message was shown unconditionally regardless of the
+      // apiCall result, so a failed sync still looked like a success to the admin.
+      if (ss) {
+        ss.textContent = '✅ ফিল্ড-লেভেল পারমিশন সংরক্ষিত হয়েছে';
+        ss.style.color = '#2d8a42'; ss.style.display = 'inline';
+        setTimeout(function(){ ss.style.display = 'none'; }, 3000);
+      }
+    } else {
+      console.warn('permissions sync failed:', res && res.error);
+      alert('❌ পারমিশন সার্ভারে (Google Sheets) সংরক্ষণ করা যায়নি!\n\nকারণ: ' + (res && res.error ? res.error : 'নেটওয়ার্ক/সার্ভার ত্রুটি') +
+        '\n\nএই পরিবর্তন শুধু এই ডিভাইসে/সেশনে আছে — ইউজার পরের বার লগইন করলে আগের (পুরনো) পারমিশনই দেখবে। ইন্টারনেট সংযোগ পরীক্ষা করে আবার Permissions খুলে Save করুন।');
+      if (ss) { ss.textContent = '⚠️ Sync failed'; ss.style.color = '#c62828'; ss.style.display = 'inline';
+        setTimeout(function(){ ss.style.display = 'none'; }, 4000); }
+    }
+  });
 }
 
 // ── SPECIES DROPDOWN POPULATION ──
