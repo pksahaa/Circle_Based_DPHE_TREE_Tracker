@@ -361,6 +361,7 @@ tr:hover td{background:#f8fdf8}
    are needed here. */
 .mon-photo-btn{padding:3px 8px;font-size:10px;border:1.5px solid #1976d2;background:#e3f2fd;color:#1565c0;border-radius:5px;cursor:pointer;white-space:nowrap}
 .mon-gps-badge{font-size:10px;color:#1976d2;background:#e3f2fd;padding:2px 6px;border-radius:4px;display:inline-block;margin-top:2px}
+.mon-gps-btn{padding:2px 7px;font-size:9px;border:1.5px solid #2d8a42;background:#e8f5e9;color:#1a5c2a;border-radius:5px;cursor:pointer;white-space:nowrap;margin-top:2px}
 .mon-id-cell{font-size:12px;font-weight:700;color:#1a5c2a}
 .mon-species{font-size:11px;color:#2d8a42;margin-top:1px}
 .mon-location{font-size:11px;color:#666}
@@ -1293,6 +1294,34 @@ tr:hover td{background:#f8fdf8}
     <div class="btn-row">
       <button class="btn" onclick="closeMonModal()">Cancel</button>
       <button class="btn btn-primary" id="mon-save-btn" onclick="saveMonitoringVisit()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Monitoring GPS Catch-up Modal (one-time; office-এ বসে manual entry, বা চাইলে Auto Fetch) -->
+<div id="mon-gps-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:520;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;max-width:420px;margin:80px auto;padding:24px;position:relative">
+    <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:4px">📍 GPS যোগ করুন — Add GPS</div>
+    <div style="font-size:12px;color:#888;margin-bottom:16px" id="mgm-tree-info"></div>
+    <div class="gps-box">
+      <div class="fg">
+        <label>Latitude</label>
+        <input type="text" id="mgm-lat" placeholder="e.g. 23.8103">
+      </div>
+      <div class="fg">
+        <label>Longitude</label>
+        <input type="text" id="mgm-lon" placeholder="e.g. 90.4125">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;padding-bottom:1px">
+        <button class="btn-gps" id="mgm-fetch-btn" onclick="fetchMonGPSModal()">
+          <span>📡</span> <span id="mgm-fetch-text">Auto Fetch</span>
+        </button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#aaa;margin-top:6px">অফিসে বসে manual-ও দেওয়া যাবে, অথবা মাঠে থাকলে Auto Fetch ব্যবহার করুন। ⚠️ একবার Save করলে আর পরিবর্তন করা যাবে না।</div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" onclick="closeMonGPSModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMonGPSModal()">💾 Save</button>
     </div>
   </div>
 </div>
@@ -2407,10 +2436,13 @@ function buildMonRow(r) {
     ? '<div style="display:flex;align-items:center;gap:6px;color:#c62828;font-size:11px;font-weight:600"><span style="font-size:16px">🔒</span> Tree Dead</div>'
     : '<button onclick="openMonModal(\'' + r.id + '\')" style="padding:6px 14px;border-radius:7px;border:none;background:#2d8a42;color:#fff;font-size:12px;font-weight:700;cursor:pointer">➕ New Visit</button>';
 
-  // GPS badge
+  // GPS badge — one-time "missed at planting" catch-up, same pattern as the
+  // initial photo: only shown/usable while r.lat/r.lon are empty, and locks
+  // (badge, no button) forever once set from either Add Record or here.
   var gpsBadge = (r.lat && r.lon)
     ? '<div class="mon-gps-badge">📍 ' + parseFloat(r.lat).toFixed(4) + ', ' + parseFloat(r.lon).toFixed(4) + '</div>'
-    : '<div style="font-size:10px;color:#ccc">GPS N/A</div>';
+    : '<div style="font-size:10px;color:#ccc">GPS N/A</div>' +
+      '<button class="mon-gps-btn" id="mgb-' + r.id + '" onclick="openMonGPSModal(\'' + r.id + '\')">📍 Add GPS</button>';
 
   return '<tr class="' + (dead?'dead-row':'') + '">' +
     '<td><div class="mon-id-cell">' + escapeHtml(r.id) + '</div>' +
@@ -2528,6 +2560,77 @@ function triggerMonPhoto(rid) {
     }
   };
   inp.click();
+}
+
+// One-time GPS catch-up for records that were added without GPS (since GPS
+// isn't mandatory on Add Tree Record). Same permission gate ('monitoring' or
+// 'photo') and same 'monitoring' context as the initial-photo catch-up above
+// — deliberately NOT gated by 'edit', so it doesn't hit the earlier bug.
+// Locks permanently once r.lat/r.lon are set (button disappears, badge shows).
+//
+// Opens a small modal so an office-based user (no field GPS signal) can type
+// the coordinates in manually, while a field user can still tap "Auto Fetch"
+// to pull the device's current location into the same fields before saving.
+var monGPSTargetId = null;
+
+function openMonGPSModal(rid) {
+  if (!hasPerm('monitoring') && !hasPerm('photo')) { alert('আপনার GPS যোগ করার অনুমতি নেই।'); return; }
+  var r = records.find(function(x){ return x.id === rid; });
+  if (!r) return;
+  if (r.lat && r.lon) { alert('✅ এই গাছের GPS স্থানাংক ইতিমধ্যে সংরক্ষিত আছে। এটি পরিবর্তন করা যাবে না।'); return; }
+  monGPSTargetId = rid;
+  document.getElementById('mgm-tree-info').textContent = r.id + ' — ' + r.species + ' | ' + (r.site || '');
+  document.getElementById('mgm-lat').value = '';
+  document.getElementById('mgm-lon').value = '';
+  document.getElementById('mgm-fetch-text').textContent = 'Auto Fetch';
+  document.getElementById('mon-gps-modal').style.display = 'block';
+}
+
+function closeMonGPSModal() {
+  document.getElementById('mon-gps-modal').style.display = 'none';
+  monGPSTargetId = null;
+}
+
+// Optional convenience for field staff — fills the same manual boxes, doesn't
+// save by itself. Office staff can simply ignore this and type values in.
+function fetchMonGPSModal() {
+  if (!navigator.geolocation) { alert('❌ এই ডিভাইসে GPS সমর্থিত নয়। মান manually লিখুন।'); return; }
+  document.getElementById('mgm-fetch-text').textContent = '⏳ Fetching…';
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    document.getElementById('mgm-lat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById('mgm-lon').value = pos.coords.longitude.toFixed(6);
+    document.getElementById('mgm-fetch-text').textContent = 'Auto Fetch';
+  }, function(err) {
+    var msg = {1:'Permission denied. ব্রাউজার সেটিংসে location চালু করুন।',2:'অবস্থান পাওয়া যায়নি।',3:'GPS টাইমআউট হয়েছে।'};
+    alert('❌ ' + (msg[err.code] || 'GPS error.') + ' মান manually লিখুন।');
+    document.getElementById('mgm-fetch-text').textContent = 'Auto Fetch';
+  }, {enableHighAccuracy:true, timeout:12000});
+}
+
+function saveMonGPSModal() {
+  var rid = monGPSTargetId;
+  var r = records.find(function(x){ return x.id === rid; });
+  if (!r) { closeMonGPSModal(); return; }
+  var lat = parseFloat(document.getElementById('mgm-lat').value);
+  var lon = parseFloat(document.getElementById('mgm-lon').value);
+  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    alert('⚠️ সঠিক Latitude (-90 থেকে 90) ও Longitude (-180 থেকে 180) দিন।');
+    return;
+  }
+  if (!confirm('⚠️ GPS একবার Save করলে পরে পরিবর্তন করা যাবে না। Latitude ' + lat + ', Longitude ' + lon + ' — নিশ্চিত?')) return;
+
+  r.lat = lat.toFixed(6);
+  r.lon = lon.toFixed(6);
+  closeMonGPSModal();
+  renderMonitoring();
+  apiCall('updateRecord', { record: r, context: 'monitoring' }).then(function(res) {
+    showSyncStatus(res && res.ok ? '☁️ GPS saved' : '⚠️ Sync failed', !!(res && res.ok));
+    if (!(res && res.ok)) {
+      alert('⚠️ GPS সংরক্ষণ করা যায়নি।\n\nকারণ: ' + (res && res.error ? res.error : 'নেটওয়ার্ক/সার্ভার ত্রুটি') + '\n\nইন্টারনেট চেক করে আবার চেষ্টা করুন।');
+      r.lat = ''; r.lon = ''; // roll back locally so the button reappears for retry
+      renderMonitoring();
+    }
+  });
 }
 
 // ── Per-visit photo (Monitoring "New Visit" modal) — camera/gallery, one photo per visit ──
