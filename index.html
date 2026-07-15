@@ -3729,9 +3729,26 @@ function compareOfficeKeys(a, b) {
 var SPECIES_CATEGORY_LIST = ['Fruit tree','Timber tree','Medicinal','Ornamental','Others'];
 var CARE_ACTIVITY_LIST = ['Office Management','Fencing','By Caregiver','Others'];
 
+// BUGFIX: This used to do a strict exact-string match against
+// SPECIES_CATEGORY_LIST only. Real sheet data isn't always in that exact
+// canonical form (older rows saved as just "Timber", different
+// capitalization, Bengali-only text, etc.) — so anything that didn't match
+// character-for-character silently fell into "Others", even genuine Timber
+// tree / Ornamental records. This is the same class of bug the Dashboard's
+// category donut chart already had to work around (see its lenient
+// .toLowerCase()+.includes() matching) — now Reports use the identical
+// fallback logic so Dashboard and every one of the 6 Report types (Summary,
+// Detailed, Office Register, Trend, Species Detail, Species Summary) always
+// agree on which category a record belongs to.
 function speciesCategoryOf(cat) {
   var v = (cat || '').trim();
-  return SPECIES_CATEGORY_LIST.indexOf(v) !== -1 ? v : 'Others';
+  if (SPECIES_CATEGORY_LIST.indexOf(v) !== -1) return v; // exact match — current-format data
+  var c = v.toLowerCase();
+  if (c.indexOf('fruit') !== -1) return 'Fruit tree';
+  if (c.indexOf('timber') !== -1 || c.indexOf('বনজ') !== -1) return 'Timber tree';
+  if (c.indexOf('medi') !== -1 || c.indexOf('ওষু') !== -1) return 'Medicinal';
+  if (c.indexOf('ornamental') !== -1 || c.indexOf('শোভা') !== -1) return 'Ornamental';
+  return 'Others';
 }
 
 // Some older records were saved back when the Funding Source dropdown still
