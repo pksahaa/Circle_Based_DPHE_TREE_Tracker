@@ -2480,6 +2480,7 @@ function showVisitHistory(rid) {
 
 
 function triggerMonPhoto(rid) {
+  if (!hasPerm('monitoring') && !hasPerm('photo')) { alert('আপনার ছবি আপলোড করার অনুমতি নেই।'); return; }
   var r = records.find(function(x){ return x.id === rid; });
   if (!r) return;
   if (r.photos && r.photos.length > 0) { alert('✅ এই গাছের প্রাথমিক (রোপণকালীন) ছবি ইতিমধ্যে সংরক্ষিত আছে। এটি পরিবর্তন করা যাবে না।'); return; }
@@ -2507,8 +2508,11 @@ function triggerMonPhoto(rid) {
           r.photos = [res.url];
           if (!r.photo) r.photo = res.url; // becomes the tree's current photo until a monitoring visit supersedes it
           renderMonitoring();
-          apiCall('updateRecord', { record: r }).then(function(res2) {
+          apiCall('updateRecord', { record: r, context: 'monitoring' }).then(function(res2) {
             showSyncStatus(res2 && res2.ok ? '☁️ Initial photo saved' : '⚠️ Sync failed', !!(res2 && res2.ok));
+            if (!(res2 && res2.ok)) {
+              alert('⚠️ ছবি Drive-এ আপলোড হয়েছে কিন্তু রেকর্ডে সংরক্ষণ করা যায়নি।\n\nকারণ: ' + (res2 && res2.error ? res2.error : 'নেটওয়ার্ক/সার্ভার ত্রুটি') + '\n\nইন্টারনেট চেক করে আবার চেষ্টা করুন।');
+            }
           });
         } else {
           alert('⚠️ ছবি আপলোড ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
@@ -2872,7 +2876,7 @@ function deleteMonVisit(recordId, visitIdx) {
   initDashboard();
   // Refresh history modal with updated data
   showVisitHistory(recordId);
-  apiCall('updateRecord', {record: r}).then(function(res){
+  apiCall('updateRecord', {record: r, context: 'monitoring'}).then(function(res){
     showSyncStatus(res && res.ok ? '☁️ Monitoring updated in Sheets' : '⚠️ Sync failed', !!(res&&res.ok));
   });
 }
@@ -3005,7 +3009,7 @@ function saveMonitoringVisit() {
   // Google Sheets sync — don't celebrate until the backend confirms it, since a visit
   // that only lives in this browser's memory is exactly what "other device can't see the
   // new visit/photo" looks like.
-  apiCall('updateRecord', {record: r}).then(function(res){
+  apiCall('updateRecord', {record: r, context: 'monitoring'}).then(function(res){
     var ok = !!(res && res.ok);
     showSyncStatus(ok ? '☁️ Monitoring saved to Sheets' : '⚠️ Sync failed', ok);
     r._syncFailed = !ok;
