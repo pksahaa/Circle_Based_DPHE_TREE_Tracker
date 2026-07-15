@@ -792,27 +792,16 @@ tr:hover td{background:#f8fdf8}
     <div id="gps-radius-result" style="display:none;margin-top:10px;padding:8px 12px;background:#e8f5e9;border-radius:7px;font-size:12px;color:#1b5e20;font-weight:600"></div>
   </div>
 
-  <!-- Filter Bar -->
+  <!-- Filter Bar — role-based location scope (Circle/District/Upazila, built
+       by renderLocationFilterControls) + uniform Category/Species/Search,
+       kept identical in shape to the "All Plantation Records" filter bar -->
   <div class="mon-filter-bar">
-    <label>Circle | সার্কেল</label>
-    <select id="mon-filter-div" onchange="renderMonitoring()">
-      <option value="">All Circles | সকল সার্কেল</option>
-      <option>Barishal Circle</option>
-      <option>Chattogram Circle</option>
-      <option>Chittagong Hill Tract Circle</option>
-      <option>Dhaka Circle</option>
-      <option>Faridpur Circle</option>
-      <option>Khulna Circle</option>
-      <option>Mymensingh Circle</option>
-      <option>Rajshahi Circle</option>
-      <option>Rangpur Circle</option>
-      <option>Sylhet Circle</option>
+    <div id="mon-scope-controls" style="display:contents"></div>
+    <select id="mon-filter-cat" onchange="renderMonitoring()">
+      <option value="">All Categories | সকল ধরন</option>
     </select>
-    <select id="mon-filter-dis" onchange="renderMonitoring()">
-      <option value="">All Districts | সকল জেলা</option>
-    </select>
-    <select id="mon-filter-upa" onchange="renderMonitoring()">
-      <option value="">All Upazilla/Pourashava | সকল উপজেলা/পৌরসভা</option>
+    <select id="mon-filter-species" onchange="renderMonitoring()">
+      <option value="">All Species | সকল প্রজাতি</option>
     </select>
     <button class="btn btn-primary btn-sm" onclick="renderMonitoring()" style="padding:6px 16px">🔍 Filter</button>
     <span style="flex:1"></span>
@@ -849,23 +838,12 @@ tr:hover td{background:#f8fdf8}
   </div>
   <div class="card">
     <div class="filters">
-      <select id="filter-div" onchange="filterRecords()">
-        <option value="">All Circles</option>
-        <option>Barishal Circle</option>
-        <option>Chattogram Circle</option>
-        <option>Chittagong Hill Tract Circle</option>
-        <option>Dhaka Circle</option>
-        <option>Faridpur Circle</option>
-        <option>Khulna Circle</option>
-        <option>Mymensingh Circle</option>
-        <option>Rajshahi Circle</option>
-        <option>Rangpur Circle</option>
-        <option>Sylhet Circle</option>
-      </select>
+      <div id="rec-scope-controls" style="display:contents"></div>
       <select id="filter-cat" onchange="filterRecords()">
-        <option value="">All Categories</option>
-        <option>Fruit tree</option><option>Timber tree</option>
-        <option>Medicinal</option><option>Others</option>
+        <option value="">All Categories | সকল ধরন</option>
+      </select>
+      <select id="filter-species" onchange="filterRecords()">
+        <option value="">All Species | সকল প্রজাতি</option>
       </select>
       <select id="filter-status" onchange="filterRecords()">
         <option value="">All Statuses</option>
@@ -5080,32 +5058,13 @@ document.addEventListener('DOMContentLoaded', function() {
     speciesSearchEl.addEventListener('input', function(){ if (speciesSearchEl.value) speciesSearchEl.classList.remove('field-invalid'); });
   }
 });
-document.addEventListener('DOMContentLoaded', function() {
-  var monDivSel = document.getElementById('mon-filter-div');
-  if (monDivSel) {
-    monDivSel.addEventListener('change', function() {
-      var disSel = document.getElementById('mon-filter-dis');
-      var upaSel = document.getElementById('mon-filter-upa');
-      disSel.innerHTML = '<option value="">All Districts | সকল জেলা</option>';
-      upaSel.innerHTML = '<option value="">All Upazilla/Pourashava | সকল উপজেলা</option>';
-      var div = this.value;
-      if (div && districtMap[div]) {
-        districtMap[div].forEach(function(d){ disSel.add(new Option(d,d)); });
-      }
-    });
-    var monDisSel = document.getElementById('mon-filter-dis');
-    if (monDisSel) {
-      monDisSel.addEventListener('change', function() {
-        var upaSel = document.getElementById('mon-filter-upa');
-        upaSel.innerHTML = '<option value="">All Upazilla/Pourashava | সকল উপজেলা</option>';
-        var dis = this.value;
-        if (dis && upazillaMap[dis]) {
-          upazillaMap[dis].forEach(function(u){ upaSel.add(new Option(u,u)); });
-        }
-      });
-    }
-  }
-});
+// NOTE: the old static #mon-filter-div/#mon-filter-dis cascading listeners
+// that used to live here were removed — those elements no longer exist at
+// DOMContentLoaded time. Circle→District→Upazila filtering (for both
+// Monitoring and Records) is now built dynamically, per role, by
+// renderLocationFilterControls() (called from initMonitoringFilters() /
+// initRecordsFilters() in showPage()), which wires up the equivalent
+// cascading listeners itself right after creating the elements.
 
 
 // ════════════════════════════════════════════════════════════════════
@@ -5170,6 +5129,111 @@ function canMutateRecord(r) {
     case 'upazilla':   return r.dis === SESSION.dis && r.upa === SESSION.upa;
     default: return false;
   }
+}
+
+// ── Uniform role-based location filter controls (Circle/District/Upazila) ──
+// Shared by "All Plantation Records" and "Periodic Monitoring" so both pages
+// offer exactly the same filter set, scoped exactly the same way per role:
+//   Admin      → Circle + District + Upazila selects (full picture)
+//   Circle     → Circle fixed (label), District + Upazila selects
+//   District   → Circle + District fixed (label), Upazila select
+//   Upazila    → everything fixed (label only) — scopedRecords() already
+//                restricts them to their own upazila, so no select needed
+// `prefix` gives each page's controls unique element IDs (e.g. 'mon' / 'rec').
+function renderLocationFilterControls(containerId, idPrefix, onChangeFn) {
+  var wrap = document.getElementById(containerId);
+  if (!wrap || !SESSION || !SESSION.role) return;
+  var html = '';
+  if (SESSION.role === 'admin') {
+    html += '<select id="' + idPrefix + '-div" onchange="' + onChangeFn + '()"><option value="">All Circles | সকল সার্কেল</option>' +
+      divData.map(function(d){ return '<option value="' + d.name + '">' + d.name + '</option>'; }).join('') + '</select>' +
+      '<select id="' + idPrefix + '-dis" onchange="' + onChangeFn + '()"><option value="">All Districts | সকল জেলা</option></select>' +
+      '<select id="' + idPrefix + '-upa" onchange="' + onChangeFn + '()"><option value="">All Upazilla/Pourashava | সকল উপজেলা</option></select>';
+  } else if (SESSION.role === 'divisional') {
+    html += '<span style="font-size:11px;color:#888;padding:6px 2px;white-space:nowrap">Circle: <b style="color:#1a5c2a">' + SESSION.div + '</b></span>' +
+      '<select id="' + idPrefix + '-dis" onchange="' + onChangeFn + '()"><option value="">All Districts | সকল জেলা</option>' +
+      (districtMap[SESSION.div] || []).map(function(d){ return '<option value="' + d + '">' + d + '</option>'; }).join('') + '</select>' +
+      '<select id="' + idPrefix + '-upa" onchange="' + onChangeFn + '()"><option value="">All Upazilla/Pourashava | সকল উপজেলা</option></select>';
+  } else if (SESSION.role === 'district') {
+    html += '<span style="font-size:11px;color:#888;padding:6px 2px;white-space:nowrap">' + SESSION.div + ' | District: <b style="color:#1a5c2a">' + SESSION.dis + '</b></span>' +
+      '<select id="' + idPrefix + '-upa" onchange="' + onChangeFn + '()"><option value="">All Upazilla/Pourashava | সকল উপজেলা</option>' +
+      (upazillaMap[SESSION.dis] || []).map(function(u){ return '<option value="' + u + '">' + u + '</option>'; }).join('') + '</select>';
+  } else { // upazilla — fully fixed, nothing left to pick
+    html += '<span style="font-size:11px;color:#888;padding:6px 2px;white-space:nowrap">' + SESSION.div + ' &gt; ' + SESSION.dis + ' &gt; <b style="color:#1a5c2a">' + SESSION.upa + '</b></span>';
+  }
+  wrap.innerHTML = html;
+
+  var divSel = document.getElementById(idPrefix + '-div'); // admin only
+  if (divSel) {
+    divSel.addEventListener('change', function() {
+      var disSel = document.getElementById(idPrefix + '-dis');
+      var upaSel = document.getElementById(idPrefix + '-upa');
+      disSel.innerHTML = '<option value="">All Districts | সকল জেলা</option>';
+      upaSel.innerHTML = '<option value="">All Upazilla/Pourashava | সকল উপজেলা</option>';
+      if (this.value && districtMap[this.value]) {
+        districtMap[this.value].forEach(function(d){ disSel.add(new Option(d, d)); });
+      }
+    });
+  }
+  var disSel2 = document.getElementById(idPrefix + '-dis'); // admin & circle
+  if (disSel2) {
+    disSel2.addEventListener('change', function() {
+      var upaSel = document.getElementById(idPrefix + '-upa');
+      upaSel.innerHTML = '<option value="">All Upazilla/Pourashava | সকল উপজেলা</option>';
+      if (this.value && upazillaMap[this.value]) {
+        upazillaMap[this.value].forEach(function(u){ upaSel.add(new Option(u, u)); });
+      }
+    });
+  }
+}
+
+// Effective Circle/District/Upazila filter values for a given idPrefix,
+// combining whatever the role-based selects hold with the session's own
+// fixed location (so filtering logic never has to branch on role itself).
+function getLocationFilterValues(idPrefix) {
+  if (SESSION.role === 'admin') {
+    return {
+      div: document.getElementById(idPrefix + '-div')?.value || '',
+      dis: document.getElementById(idPrefix + '-dis')?.value || '',
+      upa: document.getElementById(idPrefix + '-upa')?.value || ''
+    };
+  } else if (SESSION.role === 'divisional') {
+    return {
+      div: SESSION.div,
+      dis: document.getElementById(idPrefix + '-dis')?.value || '',
+      upa: document.getElementById(idPrefix + '-upa')?.value || ''
+    };
+  } else if (SESSION.role === 'district') {
+    return {
+      div: SESSION.div,
+      dis: SESSION.dis,
+      upa: document.getElementById(idPrefix + '-upa')?.value || ''
+    };
+  }
+  return { div: SESSION.div, dis: SESSION.dis, upa: SESSION.upa };
+}
+
+// Category filter options — single source of truth is SPECIES_CATEGORY_LIST,
+// so this can never again silently drop a category (e.g. Ornamental) the way
+// a hardcoded option list previously did.
+function populateCategoryFilterOptions(selectId) {
+  var sel = document.getElementById(selectId);
+  if (!sel || sel.options.length > 1) return; // already populated
+  SPECIES_CATEGORY_LIST.forEach(function(c){ sel.add(new Option(c, c)); });
+}
+
+// Species filter options — every species in the master Plant Species list
+// (TREE_LIST), sorted alphabetically. Populated once; TREE_LIST is loaded
+// from the backend shortly after page load, so this is called again from
+// wherever TREE_LIST gets (re)assigned.
+function populateSpeciesFilterOptions(selectId) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  var current = sel.value;
+  var names = TREE_LIST.map(function(t){ return t.en + ' (' + t.bn + ')'; }).sort();
+  sel.innerHTML = '<option value="">All Species | সকল প্রজাতি</option>' +
+    names.map(function(n){ return '<option value="' + n.replace(/"/g,'&quot;') + '">' + n + '</option>'; }).join('');
+  if (names.indexOf(current) !== -1) sel.value = current;
 }
 
 // Permission check
@@ -5965,15 +6029,34 @@ function lockLocationFields() {
 }
 
 // ── Override renderRecords to scope data ───────────────────────────
+// Build the role-based filter controls once per page-visit (NOT on every
+// keystroke/filter-change — renderLocationFilterControls rebuilds the select
+// elements from scratch, which would wipe out whatever the user just picked
+// if it ran on every renderRecords()/renderMonitoring() call instead).
+function initRecordsFilters() {
+  renderLocationFilterControls('rec-scope-controls', 'filter', 'filterRecords');
+  populateCategoryFilterOptions('filter-cat');
+  populateSpeciesFilterOptions('filter-species');
+}
+function initMonitoringFilters() {
+  renderLocationFilterControls('mon-scope-controls', 'mon-filter', 'renderMonitoring');
+  populateCategoryFilterOptions('mon-filter-cat');
+  populateSpeciesFilterOptions('mon-filter-species');
+}
+
 function renderRecords() {
   var myRecs = scopedRecords();
-  var fd = (document.getElementById('filter-div')?.value || '').toLowerCase();
-  var fc = (document.getElementById('filter-cat')?.value || '').toLowerCase();
+  var loc = getLocationFilterValues('filter');
+  var fc = (document.getElementById('filter-cat')?.value || '');
+  var fsp = (document.getElementById('filter-species')?.value || '');
   var fs = (document.getElementById('filter-status')?.value || '').toLowerCase();
   var fq = (document.getElementById('search-q')?.value || '').toLowerCase();
   var filtered = myRecs.filter(function(r){
-    return (!fd || (r.div||'').toLowerCase()===fd) &&
-           (!fc || r.cat.toLowerCase().includes(fc)) &&
+    return (!loc.div || (r.div||'')===loc.div) &&
+           (!loc.dis || (r.dis||'')===loc.dis) &&
+           (!loc.upa || (r.upa||'')===loc.upa) &&
+           (!fc  || speciesCategoryOf(r.cat)===fc) &&
+           (!fsp || r.species===fsp) &&
            (!fs || r.status.toLowerCase().includes(fs)) &&
            (!fq || r.species.toLowerCase().includes(fq) || (r.upa||'').toLowerCase().includes(fq) || r.site.toLowerCase().includes(fq) || (r.id||'').toLowerCase().includes(fq));
   });
@@ -6007,14 +6090,16 @@ function renderRecords() {
 // ── Override renderMonitoring to scope data ────────────────────────
 function renderMonitoring() {
   var myRecs = scopedRecords();
-  var fd   = (document.getElementById('mon-filter-div')?.value  || '');
-  var fdis = (document.getElementById('mon-filter-dis')?.value  || '');
-  var fupa = (document.getElementById('mon-filter-upa')?.value  || '');
+  var loc = getLocationFilterValues('mon-filter');
+  var fc  = (document.getElementById('mon-filter-cat')?.value || '');
+  var fsp = (document.getElementById('mon-filter-species')?.value || '');
   var fq   = (document.getElementById('mon-search')?.value      || '').toLowerCase();
   var filtered = myRecs.filter(function(r){
-    return (!fd   || r.div===fd) &&
-           (!fdis || r.dis===fdis) &&
-           (!fupa || r.upa===fupa) &&
+    return (!loc.div || r.div===loc.div) &&
+           (!loc.dis || r.dis===loc.dis) &&
+           (!loc.upa || r.upa===loc.upa) &&
+           (!fc  || speciesCategoryOf(r.cat)===fc) &&
+           (!fsp || r.species===fsp) &&
            (!fq   || r.species.toLowerCase().includes(fq) || r.site.toLowerCase().includes(fq) || r.id.toLowerCase().includes(fq));
   });
   if (filtered.length === 0) {
@@ -6534,8 +6619,8 @@ function showPage(id, el) {
     document.querySelectorAll('.sidebar-item').forEach(function(s){s.classList.remove('active');});
     el.classList.add('active');
   }
-  if (id==='records') renderRecords();
-  if (id==='monitoring') renderMonitoring();
+  if (id==='records') { initRecordsFilters(); renderRecords(); }
+  if (id==='monitoring') { initMonitoringFilters(); renderMonitoring(); }
   if (id==='map') { renderMapScopeControls(); setTimeout(function(){ initLeafletMap(); if(leafletMap) leafletMap.invalidateSize(); },100); }
   if (id==='species') { renderSpeciesTable(); }
   if (id==='dashboard') { initDashboard(); }
