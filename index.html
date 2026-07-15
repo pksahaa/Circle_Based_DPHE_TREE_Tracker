@@ -2376,10 +2376,14 @@ function buildMonRow(r) {
   var lastVisit = getLastVisit(r);
 
   // Photo cell — one-time "initial planting photo" catch-up (locked once set, from either
-  // Add Record or this catch-up uploader).
+  // Add Record or this catch-up uploader). Users with 'edit' permission get a
+  // small delete link to undo a mistaken upload — clearing it also re-enables
+  // the "Add Initial Photo" button so a corrected photo can be added.
   var hasInitialPhoto = r.photos && r.photos.length > 0;
   var photoCell = hasInitialPhoto
-    ? '<div style="font-size:10px;color:#2d8a42;font-weight:700;text-align:center">✅ Initial photo<br>saved 🔒</div>'
+    ? '<div style="font-size:10px;color:#2d8a42;font-weight:700;text-align:center">✅ Initial photo<br>saved 🔒' +
+        (hasPerm('edit') ? '<br><a href="javascript:void(0)" onclick="deleteInitialPhoto(\'' + r.id + '\')" style="font-size:9px;color:#c62828;font-weight:400;text-decoration:underline">🗑️ ভুল হলে মুছুন</a>' : '') +
+      '</div>'
     : '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">' +
         '<button class="mon-photo-btn" onclick="triggerMonPhoto(\'' + r.id + '\')">📸 Add Initial Photo</button>' +
         '<span style="font-size:10px;color:#aaa" id="mpn-' + r.id + '">Missed at planting</span>' +
@@ -2538,6 +2542,41 @@ function triggerMonPhoto(rid) {
     }
   };
   inp.click();
+}
+
+// Undo a mistaken initial-photo upload. Deliberately gated by 'edit'
+// permission (not 'monitoring'/'photo') — this is a genuine correction to a
+// record, not the routine one-time catch-up upload, so only users trusted to
+// edit records should be able to remove it. Also deletes the file from
+// Google Drive (not just from the record) so mistaken uploads don't sit
+// around wasting Drive storage. Clearing r.photos re-enables the "Add
+// Initial Photo" button so a corrected photo can be uploaded afterward.
+function deleteInitialPhoto(rid) {
+  if (!hasPerm('edit')) { alert('আপনার এই ছবি মুছে ফেলার অনুমতি নেই। শুধুমাত্র Edit অনুমতিপ্রাপ্ত ব্যবহারকারীরা এটি করতে পারবেন।'); return; }
+  var r = records.find(function(x){ return x.id === rid; });
+  if (!r || !r.photos || !r.photos.length) return;
+  if (!confirm('⚠️ এই প্রাথমিক (রোপণকালীন) ছবিটি মুছে ফেলা হবে — Google Drive থেকেও স্থায়ীভাবে মুছে যাবে। এই কাজটি পূর্বাবস্থায় ফেরানো যাবে না।\n\nআপনি কি নিশ্চিত?')) return;
+
+  var oldUrl = r.photos[0];
+  var oldFileId = driveFileIdFromUrl(oldUrl);
+  var wasCurrentPhoto = (r.photo === oldUrl); // hasn't been superseded by a later monitoring-visit photo
+
+  r.photos = [];
+  if (wasCurrentPhoto) r.photo = '';
+  renderMonitoring();
+
+  apiCall('updateRecord', { record: r, context: 'edit' }).then(function(res) {
+    showSyncStatus(res && res.ok ? '☁️ Photo removed' : '⚠️ Sync failed', !!(res && res.ok));
+    if (res && res.ok) {
+      if (oldFileId) apiCall('deleteImage', { fileId: oldFileId }); // best-effort Drive cleanup, fire-and-forget
+    } else {
+      // roll back locally so the badge/button reflects what's actually saved
+      r.photos = [oldUrl];
+      if (wasCurrentPhoto) r.photo = oldUrl;
+      renderMonitoring();
+      alert('⚠️ ছবি মুছে ফেলা যায়নি।\n\nকারণ: ' + (res && res.error ? res.error : 'নেটওয়ার্ক/সার্ভার ত্রুটি') + '\n\nআবার চেষ্টা করুন।');
+    }
+  });
 }
 
 // One-time GPS catch-up for records that were added without GPS (since GPS
