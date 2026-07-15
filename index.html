@@ -2382,7 +2382,7 @@ function buildMonRow(r) {
   var hasInitialPhoto = r.photos && r.photos.length > 0;
   var photoCell = hasInitialPhoto
     ? '<div style="font-size:10px;color:#2d8a42;font-weight:700;text-align:center">✅ Initial photo<br>saved 🔒' +
-        (hasPerm('edit') ? '<br><a href="javascript:void(0)" onclick="deleteInitialPhoto(\'' + r.id + '\')" style="font-size:9px;color:#c62828;font-weight:400;text-decoration:underline">🗑️ ভুল হলে মুছুন</a>' : '') +
+        (hasPerm('edit') ? '<br><a href="javascript:void(0)" onclick="deleteInitialPhoto(\'' + r.id + '\')" style="font-size:9px;color:#c62828;font-weight:400;text-decoration:underline">🗑️ Delete Picture</a>' : '') +
       '</div>'
     : '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">' +
         '<button class="mon-photo-btn" onclick="triggerMonPhoto(\'' + r.id + '\')">📸 Add Initial Photo</button>' +
