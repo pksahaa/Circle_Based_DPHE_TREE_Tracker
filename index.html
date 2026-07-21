@@ -117,6 +117,9 @@ body{font-family:Arial,sans-serif;background:#f0f4f0;color:#1a1a1a;min-height:10
 .stat-card.blue .stat-val{color:#1976d2}
 .stat-card.amber .stat-val{color:#f57c00}
 .stat-card.red .stat-val{color:#c62828}
+.stat-card.compact{padding:10px 14px}
+.stat-card.compact .stat-val{font-size:19px}
+.stat-card.compact .stat-label{font-size:10px;margin-bottom:4px}
 .stat-sub{font-size:11px;color:#aaa;margin-top:4px}
 
 /* ── PROGRESS ── */
@@ -828,8 +831,30 @@ body.dss-presentation #dss-exit-presentation-btn { display:block; }
       <option value="">All Species | সকল প্রজাতি</option>
     </select>
     <button class="btn btn-primary btn-sm" onclick="renderMonitoring()" style="padding:6px 16px">🔍 Filter</button>
+    <button class="btn btn-sm" onclick="clearMonFilters()" style="padding:6px 16px;border-color:#c62828;color:#c62828">✖ Clear Filter</button>
     <span style="flex:1"></span>
     <input type="text" id="mon-search" placeholder="🔍 ID / Species / Site... | আইডি/প্রজাতি/স্থান" oninput="renderMonitoring()" style="width:200px">
+  </div>
+
+  <!-- Filtered Summary Cards — mirror of the dashboard's stat cards, kept in
+       sync with the filter bar above by renderMonitoring() -->
+  <div class="stat-grid" id="mon-stat-grid" style="margin-bottom:14px">
+    <div class="stat-card compact">
+      <div class="stat-label">🌳 Total Tree | মোট গাছ</div>
+      <div class="stat-val" id="mon-s-total">0</div>
+    </div>
+    <div class="stat-card compact">
+      <div class="stat-label">✅ Alive | জীবিত</div>
+      <div class="stat-val" id="mon-s-alive" style="color:#2d8a42">0</div>
+    </div>
+    <div class="stat-card compact blue">
+      <div class="stat-label">🔍 Total Monitoring | মোট তদারকি</div>
+      <div class="stat-val" id="mon-s-visits">0</div>
+    </div>
+    <div class="stat-card compact amber">
+      <div class="stat-label">📅 Last Monitoring Date | সর্বশেষ তারিখ</div>
+      <div class="stat-val" id="mon-s-date" style="font-size:15px">—</div>
+    </div>
   </div>
 
   <!-- Monitoring Table -->
@@ -878,6 +903,27 @@ body.dss-presentation #dss-exit-presentation-btn { display:block; }
       </select>
       <input type="text" id="search-q" placeholder="🔍 Search Tree ID, species, upazilla, site..." oninput="filterRecords()">
       <button class="btn btn-primary btn-sm" id="records-filter-btn" onclick="filterRecords()" style="padding:6px 16px">🔍 Filter</button>
+      <button class="btn btn-sm" onclick="clearRecordsFilters()" style="padding:6px 16px;border-color:#c62828;color:#c62828">✖ Clear Filter</button>
+    </div>
+
+    <!-- Filtered Summary Cards — kept in sync with the filter bar above by renderRecords() -->
+    <div class="stat-grid" id="rec-stat-grid" style="margin:14px 0">
+      <div class="stat-card compact">
+        <div class="stat-label">🌳 Total Tree | মোট গাছ</div>
+        <div class="stat-val" id="rec-s-total">0</div>
+      </div>
+      <div class="stat-card compact blue">
+        <div class="stat-label">💰 Total Cost | মোট খরচ</div>
+        <div class="stat-val" id="rec-s-cost" style="font-size:16px">৳0</div>
+      </div>
+      <div class="stat-card compact">
+        <div class="stat-label">✅ Alive | জীবিত</div>
+        <div class="stat-val" id="rec-s-alive" style="color:#2d8a42">0</div>
+      </div>
+      <div class="stat-card compact red">
+        <div class="stat-label">☠️ Dead | মৃত</div>
+        <div class="stat-val" id="rec-s-dead">0</div>
+      </div>
     </div>
 
     <div style="overflow-x:auto">
@@ -1436,7 +1482,8 @@ body.dss-presentation #dss-exit-presentation-btn { display:block; }
 <div id="visit-history-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;max-width:560px;margin:40px auto;padding:24px;position:relative">
     <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:4px">📋 Visit History</div>
-    <div id="visit-history-tree-info" style="font-size:12px;color:#888;margin-bottom:14px"></div>
+    <div id="visit-history-tree-info" style="font-size:12px;color:#888;margin-bottom:8px"></div>
+    <div id="visit-history-directions" style="margin-bottom:14px"></div>
     <div id="visit-history-body" style="max-height:420px;overflow-y:auto"></div>
     <div class="btn-row" style="margin-top:16px">
       <button class="btn btn-primary" onclick="document.getElementById('visit-history-modal').style.display='none';currentMonRecordId=null;">Close</button>
@@ -3043,11 +3090,28 @@ function renderMonitoringFromList(list) {
   document.getElementById('mon-tbody').innerHTML = list.map(r => buildMonRow(r)).join('');
 }
 
+// Opens Google Maps with directions from wherever the visitor currently is
+// to a tree's recorded GPS point — works the same way on mobile (opens the
+// Google Maps app) and on desktop (opens Google Maps in the browser).
+// Leaving the origin out of the URL lets Google Maps use the device's
+// current location automatically.
+function openTreeDirections(lat, lon) {
+  if (!lat || !lon) { alert('📍 এই গাছের জিপিএস অবস্থান রেকর্ড করা নেই। | GPS location not recorded for this tree.'); return; }
+  var url = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(lat) + ',' + encodeURIComponent(lon) + '&travelmode=driving';
+  window.open(url, '_blank');
+}
+
 function showVisitHistory(rid) {
   var r = records.find(x => x.id === rid);
   if (!r) return;
   var visits = (r.monitoring || []).slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
   document.getElementById('visit-history-tree-info').textContent = r.id + ' — ' + r.species + ' | ' + r.site;
+  var dirEl = document.getElementById('visit-history-directions');
+  if (dirEl) {
+    dirEl.innerHTML = (r.lat && r.lon)
+      ? '<button class="btn btn-sm btn-primary" onclick="openTreeDirections(\'' + r.lat + '\',\'' + r.lon + '\')" style="font-size:11px;padding:6px 14px">🧭 Get Directions | দিক নির্দেশনা</button>'
+      : '<span style="font-size:11px;color:#aaa">📍 GPS location not recorded for this tree | এই গাছের জিপিএস অবস্থান নেই</span>';
+  }
   var html = visits.length === 0
     ? '<p style="color:#aaa;text-align:center;padding:20px">কোনো পরিদর্শন রেকর্ড নেই।</p>'
     : visits.map(function(v, i) {
@@ -8132,6 +8196,36 @@ function renderRecords() {
     '</td></tr>';
   }).join('');
   document.getElementById('records-count').textContent = 'Showing ' + filtered.length + ' of ' + myRecs.length + ' records (your scope)';
+  updateRecordsStatCards(filtered);
+}
+
+// Refreshes the compact "Total Tree / Total Cost / Alive / Dead" cards on
+// the All Plantation Records page so they always reflect whatever is
+// currently filtered above them.
+function updateRecordsStatCards(filtered) {
+  var totalTree  = filtered.length;
+  var totalCost  = filtered.reduce(function(sum, r){ return sum + (parseFloat(r.cost) || 0); }, 0);
+  var aliveCount = filtered.filter(function(r){ return r.status === 'Alive'; }).length;
+  var deadCount  = filtered.filter(function(r){ return r.status === 'Dead'; }).length;
+  var elT = document.getElementById('rec-s-total'); if (elT) elT.textContent = totalTree.toLocaleString();
+  var elC = document.getElementById('rec-s-cost');  if (elC) elC.textContent = '৳' + Math.round(totalCost).toLocaleString();
+  var elA = document.getElementById('rec-s-alive'); if (elA) elA.textContent = aliveCount.toLocaleString();
+  var elD = document.getElementById('rec-s-dead');  if (elD) elD.textContent = deadCount.toLocaleString();
+}
+
+// Resets every All Plantation Records filter (location scope selects,
+// category, species, status, search box) back to "All" and re-renders.
+function clearRecordsFilters() {
+  var divSel = document.getElementById('filter-div'); if (divSel) divSel.value = '';
+  var disSel = document.getElementById('filter-dis');
+  if (disSel) disSel.innerHTML = '<option value="">All Districts | সকল জেলা</option>';
+  var upaSel = document.getElementById('filter-upa');
+  if (upaSel) upaSel.innerHTML = '<option value="">All Upazilla/Pourashava | সকল উপজেলা</option>';
+  var cat = document.getElementById('filter-cat'); if (cat) cat.value = '';
+  var sp  = document.getElementById('filter-species'); if (sp) sp.value = '';
+  var st  = document.getElementById('filter-status'); if (st) st.value = '';
+  var sq  = document.getElementById('search-q'); if (sq) sq.value = '';
+  filterRecords();
 }
 
 // ── Override renderMonitoring to scope data ────────────────────────
@@ -8149,12 +8243,46 @@ function renderMonitoring() {
            (!fsp || r.species===fsp) &&
            (!fq   || r.species.toLowerCase().includes(fq) || r.site.toLowerCase().includes(fq) || r.id.toLowerCase().includes(fq));
   });
+  updateMonStatCards(filtered);
   if (filtered.length === 0) {
     document.getElementById('mon-tbody').innerHTML =
       '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:40px;font-size:13px">No records in your scope | আপনার স্কোপে কোনো রেকর্ড নেই।</td></tr>';
     return;
   }
   document.getElementById('mon-tbody').innerHTML = filtered.map(function(r){ return buildMonRow(r); }).join('');
+}
+
+// Refreshes the compact "Total Tree / Alive / Total Monitoring / Last Date"
+// cards on the Periodic Monitoring page so they always reflect whatever is
+// currently filtered above them.
+function updateMonStatCards(filtered) {
+  var totalTree  = filtered.length;
+  var aliveCount = filtered.filter(function(r){ return r.status === 'Alive'; }).length;
+  var totalVisits = filtered.reduce(function(sum, r){ return sum + ((r.monitoring && r.monitoring.length) || 0); }, 0);
+  var lastDate = '';
+  filtered.forEach(function(r){
+    (r.monitoring || []).forEach(function(v){
+      if (v.date && (!lastDate || v.date > lastDate)) lastDate = v.date;
+    });
+  });
+  var elT = document.getElementById('mon-s-total');  if (elT) elT.textContent = totalTree.toLocaleString();
+  var elA = document.getElementById('mon-s-alive'); if (elA) elA.textContent = aliveCount.toLocaleString();
+  var elV = document.getElementById('mon-s-visits'); if (elV) elV.textContent = totalVisits.toLocaleString();
+  var elD = document.getElementById('mon-s-date');   if (elD) elD.textContent = lastDate || '—';
+}
+
+// Resets every Periodic Monitoring filter (location scope selects, category,
+// species, search box) back to "All" and re-renders.
+function clearMonFilters() {
+  var divSel = document.getElementById('mon-filter-div'); if (divSel) divSel.value = '';
+  var disSel = document.getElementById('mon-filter-dis');
+  if (disSel) disSel.innerHTML = '<option value="">All Districts | সকল জেলা</option>';
+  var upaSel = document.getElementById('mon-filter-upa');
+  if (upaSel) upaSel.innerHTML = '<option value="">All Upazilla/Pourashava | সকল উপজেলা</option>';
+  var cat = document.getElementById('mon-filter-cat'); if (cat) cat.value = '';
+  var sp  = document.getElementById('mon-filter-species'); if (sp) sp.value = '';
+  var sq  = document.getElementById('mon-search'); if (sq) sq.value = '';
+  renderMonitoring();
 }
 
 // ── Override initDashboard to include RBAC elements ────────────────
