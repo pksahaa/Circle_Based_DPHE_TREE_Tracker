@@ -40,6 +40,7 @@
 <title>DPHE Tree Tracker</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -89,6 +90,10 @@ body{font-family:Arial,sans-serif;background:#f0f4f0;color:#1a1a1a;min-height:10
 .sidebar-item:hover{background:#f0f7f0;color:#1a5c2a}
 .sidebar-item.active{background:#e8f5e9;color:#1a5c2a;border-left-color:#2d8a42;font-weight:600}
 .sidebar-item .si{font-size:18px}
+.sidebar-item-dss{position:relative}
+.sidebar-item-dss:hover{background:#fff8e6;color:#8a6100}
+.sidebar-item-dss.active{background:#fff3cd;color:#8a6100;border-left-color:#c9971f;font-weight:600}
+.dss-badge{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.03em;color:#8a6100;background:#ffe8a3;border:1px solid #e0b84a;border-radius:10px;padding:1px 7px}
 .content{flex:1;padding:24px;overflow-y:auto;background:#f0f4f0}
 .page{display:none}
 .page.active{display:block}
@@ -287,6 +292,22 @@ tr:hover td{background:#f8fdf8}
 .kpi-card.amber .kpi-val{color:#f57c00} .kpi-card.amber{border-left-color:#f57c00}
 .kpi-card.red .kpi-val{color:#c62828} .kpi-card.red{border-left-color:#c62828}
 .kpi-card.purple .kpi-val{color:#6a1b9a} .kpi-card.purple{border-left-color:#6a1b9a}
+.kpi-grid-wide{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+
+/* ── Module 11: Government Presentation Mode (DSS page only) ──────────
+   Scoped entirely behind body.dss-presentation, which only ever gets added
+   by toggleDssPresentationMode() while viewing the DSS page — inert
+   otherwise, touches nothing on any other page. */
+body.dss-presentation .sidebar, body.dss-presentation .navbar { display:none !important; }
+body.dss-presentation #dss-filter-card, body.dss-presentation #dss-budget-settings-card,
+body.dss-presentation #dss-predictive-section, body.dss-presentation #dss-scenario-section,
+body.dss-presentation #dss-gis-section { display:none !important; }
+body.dss-presentation .kpi-val { font-size:32px !important; }
+body.dss-presentation .kpi-label { font-size:13px !important; }
+body.dss-presentation .card-title { font-size:18px !important; }
+body.dss-presentation .card { padding:22px 26px !important; }
+#dss-exit-presentation-btn { display:none; position:fixed; top:16px; right:16px; z-index:9999; background:#1a5c2a; color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+body.dss-presentation #dss-exit-presentation-btn { display:block; }
 /* ── PERMISSION DENIED ── */
 .perm-denied{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 40px;text-align:center;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
 .perm-denied-icon{font-size:64px;margin-bottom:16px}
@@ -379,6 +400,7 @@ tr:hover td{background:#f8fdf8}
 /* ── RESPONSIVE ── */
 @media(max-width:700px){
   .stat-grid{grid-template-columns:1fr 1fr}
+  .kpi-grid-wide{grid-template-columns:1fr 1fr}
   .two-col{grid-template-columns:1fr}
   .form-grid{grid-template-columns:1fr}
   .sidebar{display:none}
@@ -501,6 +523,8 @@ tr:hover td{background:#f8fdf8}
   <div class="sidebar-item" onclick="showPage('species',this)"><span class="si">🌿</span> Plant Species</div>
   <div class="sidebar-section">Analysis</div>
   <div class="sidebar-item" onclick="showPage('reports',this)"><span class="si">📈</span> Reports</div>
+  <div class="sidebar-item sidebar-item-dss" id="sidebar-dss" style="display:none" onclick="showPage('dss',this)"><span class="si">🏛️</span> Executive DSS <span class="dss-badge" id="sidebar-dss-badge">HQ</span></div>
+  <div class="sidebar-item sidebar-item-dss" id="sidebar-dss-config" style="display:none" onclick="showPage('dss-config',this)"><span class="si">⚙️</span> DSS Configuration <span class="dss-badge">HQ</span></div>
   <div class="sidebar-section" id="admin-section">Admin</div>
   <div class="sidebar-item" id="admin-users-menu" onclick="showPage('users',this)"><span class="si">👥</span> User Management</div>
   <div class="sidebar-section">Help</div>
@@ -1029,6 +1053,107 @@ tr:hover td{background:#f8fdf8}
   </div>
 </div>
 
+<!-- ─── EXECUTIVE DECISION SUPPORT SYSTEM (viewing gated by the 'dss' permission — see showPage()/applySidebarPermissions(); editing its Configuration stays HQ-Admin-only) ─── -->
+<div class="page" id="page-dss">
+  <button id="dss-exit-presentation-btn" onclick="toggleDssPresentationMode()">✕ Exit Presentation Mode</button>
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div class="page-title">🏛️ Executive Decision Support System <span style="font-weight:400;color:#2d8a42">| নির্বাহী সিদ্ধান্ত সহায়তা</span></div>
+    <div class="no-print" style="display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="toggleDssPresentationMode()">🖥️ Presentation Mode</button>
+      <button class="btn btn-primary btn-sm" id="dss-pdf-btn" onclick="exportExecutiveDssPDF(this)">📄 Executive PDF</button>
+    </div>
+  </div>
+  <div id="dss-content">
+    <div id="dss-config-summary-bar"></div>
+    <div class="card" id="dss-filter-card" style="margin-bottom:14px">
+      <div class="card-title"><span>🔍</span> Filters <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">Applies live to every module on this page</span></div>
+      <div class="form-grid" style="grid-template-columns:repeat(6,1fr)">
+        <div class="fg"><label>Circle</label>
+          <select id="dss-f-div" onchange="onDssFilterDivChange()"><option value="">All Circles</option></select>
+        </div>
+        <div class="fg"><label>District</label>
+          <select id="dss-f-dis" onchange="onDssFilterDisChange()"><option value="">All Districts</option></select>
+        </div>
+        <div class="fg"><label>Upazilla</label>
+          <select id="dss-f-upa" onchange="onDssFilterChange()"><option value="">All Upazillas</option></select>
+        </div>
+        <div class="fg"><label>Species</label>
+          <select id="dss-f-species" onchange="onDssFilterChange()"><option value="">All Species</option></select>
+        </div>
+        <div class="fg"><label>Status</label>
+          <select id="dss-f-status" onchange="onDssFilterChange()">
+            <option value="">All Status</option>
+            <option value="Alive">Alive</option>
+            <option value="Dead">Dead</option>
+            <option value="Care Required">Care Required</option>
+            <option value="Pending Check">Pending Check</option>
+          </select>
+        </div>
+        <div class="fg"><label>&nbsp;</label>
+          <button class="btn btn-sm" style="width:100%" onclick="resetDssFilters()">↺ Reset Filters</button>
+        </div>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-top:10px">
+        <div class="fg"><label>Date From</label><input type="date" id="dss-f-datefrom" onchange="onDssFilterChange()"></div>
+        <div class="fg"><label>Date To</label><input type="date" id="dss-f-dateto" onchange="onDssFilterChange()"></div>
+      </div>
+      <div id="dss-filter-summary" style="font-size:11px;color:#999;margin-top:10px"></div>
+    </div>
+    <div id="dss-kpi-section"></div>
+    <div id="dss-epi-section"></div>
+    <div id="dss-alerts-section"></div>
+    <div id="dss-risk-section"></div>
+    <div id="dss-recommendations-section"></div>
+    <div id="dss-ranking-section"></div>
+    <div id="dss-budget-intel-section"></div>
+    <div id="dss-climate-section"></div>
+    <div id="dss-predictive-section"></div>
+    <div id="dss-scenario-section"></div>
+    <div id="dss-gis-section">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title"><span>🗺️</span> GIS Intelligence <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">Separate map instance — does not affect the main Map View page</span></div>
+        <div class="no-print" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="btn btn-sm" id="dss-heat-btn-carbon" onclick="setDssHeatLayerType('carbon')">🌳 Carbon</button>
+          <button class="btn btn-sm" id="dss-heat-btn-risk" onclick="setDssHeatLayerType('risk')">🛡️ Risk</button>
+          <button class="btn btn-sm" id="dss-heat-btn-survival" onclick="setDssHeatLayerType('survival')">💀 Mortality</button>
+          <button class="btn btn-sm" id="dss-heat-btn-budget" onclick="setDssHeatLayerType('budget')">💰 Budget</button>
+          <button class="btn btn-sm btn-primary" onclick="centerDssMapBangladesh()" style="margin-left:auto">🗺️ Fit Bangladesh</button>
+        </div>
+        <div id="dss-leaflet-map" style="height:380px;width:100%;border-radius:8px"></div>
+        <p id="dss-gis-caption" style="font-size:11px;color:#aaa;padding:8px 4px 0"></p>
+        <div id="dss-gis-legend" style="padding:0 4px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── DSS CONFIGURATION (HQ Admin only — same hard gate as Executive DSS) ─── -->
+<div class="page" id="page-dss-config">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div class="page-title">⚙️ DSS Configuration <span style="font-weight:400;color:#2d8a42">| ডিএসএস কনফিগারেশন</span></div>
+    <div class="no-print">
+      <button class="btn btn-sm" onclick="showPage('dss', document.getElementById('sidebar-dss'))">🏛️ Back to Executive DSS</button>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:14px;padding:10px 16px;background:#fffdf5;border-left:4px solid #c9971f">
+    <div style="font-size:12px;color:#8a6100">
+      Every assumption and threshold used across the Executive DSS lives here — change a value below
+      and every module that depends on it (KPIs, Environmental Performance Index, Risk Assessment,
+      Rankings, Predictive Analytics, Scenario Simulator, GIS layers) reacts the next time you view
+      it. Click the 📎 next to any field to attach a reference — Title, Source, URL, Notes, and
+      Effective Date — for transparency and audit purposes.
+    </div>
+  </div>
+  <div id="dss-config-content"></div>
+  <div class="card no-print" style="position:sticky;bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 -2px 12px rgba(0,0,0,0.12)">
+    <span id="dss-config-status" style="font-size:12px;line-height:1.6"></span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="resetDssConfigForm()">↺ Reset All to Defaults</button>
+      <button class="btn btn-primary" onclick="saveDssConfigForm()">💾 Save All Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── USERS ─── -->
 <div class="page" id="page-users">
   <div class="section-header">
@@ -1127,6 +1252,9 @@ tr:hover td{background:#f8fdf8}
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
           <input type="checkbox" id="perm-reports"> 📈 View Reports
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
+          <input type="checkbox" id="perm-dss"> 🏛️ Executive DSS (scoped to their own jurisdiction)
         </label>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;background:#fff;padding:8px 10px;border-radius:8px;border:1.5px solid #ddd">
           <input type="checkbox" id="perm-export"> ⬇️ Export CSV
@@ -1457,6 +1585,14 @@ function loadAllFromSheets() {
     renderMonitoring();
     renderSpeciesTable();
     populateSpeciesDropdown();
+    // DSS Configuration used to live ONLY in this browser's localStorage, so
+    // an HQ Admin changing it on one device never propagated to any other
+    // user/device — everyone kept computing the DSS off their own, possibly
+    // stale, local copy. The backend has its own dedicated getDssConfig
+    // (any logged-in role may read) / saveDssConfig (HQ Admin only writes)
+    // actions, backed by the DSS_Config sheet — this wires the frontend up
+    // to them. Not part of getAll() itself since it's its own action.
+    syncDssConfigFromBackend();
   });
 }
 
@@ -1636,6 +1772,7 @@ var PERM_DEFS = [
   {key:'map',       label:'🗺️ Map দেখা'},
   {key:'species',   label:'🌿 Species পরিচালনা'},
   {key:'reports',   label:'📈 Reports দেখা'},
+  {key:'dss',       label:'🏛️ Executive DSS দেখা'},
   {key:'export',    label:'⬇️ CSV Export করা'},
   {key:'photo',     label:'📷 ছবি আপলোড'},
   {key:'users',     label:'👥 User Management'},
@@ -1643,12 +1780,473 @@ var PERM_DEFS = [
 
 // ডিফল্ট পারমিশন — নতুন ব্যবহারকারী যোগ করার সময় শুরুতে কী চেক থাকবে
 // (Admin যেকোনো সময় যেকোনো পারমিশন যোগ বা বাদ দিতে পারবেন)
+// NOTE on 'dss': existing users saved BEFORE this permission existed have a
+// stored perms[] array that simply doesn't contain 'dss' yet — that array is
+// used as-is on login (see enterAppAsUser()), it does not get merged with
+// these role defaults for newly-added keys. So any already-existing
+// Divisional/District/Upazilla user needs their profile opened and re-saved
+// once (the "🏛️ Executive DSS দেখা" checkbox — check it, then Save) before
+// they'll see the Executive DSS menu. Brand-new users created from now on
+// get the correct default automatically.
 var ROLE_DEFAULT_PERMS = {
-  'HQ Admin':    ['dashboard','add','edit','delete','monitoring','records','map','species','reports','export','photo','users'],
-  'Divisional':  ['dashboard','add','monitoring','records','map','reports','export','photo'],
-  'District':    ['dashboard','add','monitoring','records','map','reports','export','photo'],
-  'Upazilla':    ['dashboard','add','monitoring','records','reports','export','photo'],
+  'HQ Admin':    ['dashboard','add','edit','delete','monitoring','records','map','species','reports','dss','export','photo','users'],
+  'Divisional':  ['dashboard','add','monitoring','records','map','reports','dss','export','photo'],
+  'District':    ['dashboard','add','monitoring','records','map','reports','dss','export','photo'],
+  'Upazilla':    ['dashboard','add','monitoring','records','reports','dss','export','photo'],
 };
+
+/* ════════════════════════════════════════════════════════════════════
+   EXECUTIVE DECISION SUPPORT SYSTEM (DSS) — UNIFIED CONFIGURATION
+   ════════════════════════════════════════════════════════════════════
+   REVISION (pre-backend): every assumption/threshold the DSS uses lives in
+   ONE schema now (previously split across DSS_CONFIG, CARBON_MODEL_CONFIG,
+   and a few one-off localStorage keys for Budget Allocation / attrition
+   rate). No DSS calculation should read a bare number — everything reads
+   through getDssConfig(), so an HQ Admin can change any of these from the
+   new "DSS Configuration" page without touching code.
+
+   Data flow: DSS_CONFIGURATION (defaults) → getDssConfig() (defaults +
+   any saved admin overrides, from ONE localStorage key) → every compute*()
+   function in this file → the Executive DSS page / Reports / Scenario
+   Simulator / GIS layers.
+
+   Each field below is grouped by category (matches the Config page's
+   sections) and includes min/max validation bounds where relevant. A
+   `references` object is intentionally present but empty for most fields —
+   the reference/citation UI (Source, URL, Notes, Effective Date) is a
+   follow-up revision; the data slot exists now so nothing needs
+   restructuring again when that lands.
+   ════════════════════════════════════════════════════════════════════ */
+var DSS_CONFIGURATION_VERSION = 1;
+var DSS_CONFIGURATION_STORAGE_KEY = 'dphe_dss_configuration_v' + DSS_CONFIGURATION_VERSION;
+// Legacy per-field keys from the prototype phases — read once for migration,
+// never written to again.
+var DSS_LEGACY_BUDGET_KEY = 'dphe_dss_budget_allocation_bdt';
+var DSS_LEGACY_ATTRITION_KEY = 'dphe_dss_predictive_mortality_rate_pct';
+
+var DSS_CONFIGURATION_DEFAULTS = {
+  // A. Performance Score Bands — Environmental Performance Index (Module 2).
+  performanceBands: {
+    excellentMin: 85, goodMin: 70, moderateMin: 50, // below moderateMin = Critical
+  },
+  // B. Budget Allocation Thresholds. totalAllocatedBDT is the ONE figure an
+  // admin actually enters in practice (Government releases funds ad hoc,
+  // there's no fixed annual figure) — entered on the DSS Configuration page;
+  // the Executive DSS page only displays it, read-only, with a link back
+  // here to change it.
+  budget: {
+    totalAllocatedBDT: 5000000,
+    avgAnnualMaintenanceCostPerTreeBDT: 25, // used by Predictive Analytics' "maintenance demand" forecast
+    excellentRoiPct: 15,             // Estimated Annual ROI at/above this = "Excellent" (Admin-only card — see kpi.cls==='admin-only' notes)
+    acceptableRoiPct: 5,             // at/above this (but below Excellent) = "Acceptable"; below = "Low"
+    budgetWarningRemainingPct: 10,   // Smart Alert fires when remaining budget < this % of allocation
+    budgetUtilizationWarningPct: 85, // earlier heads-up when spent/allocated crosses this %, before it's critical
+    investmentPriorityCount: 3,      // how many bottom-ranked districts get an Executive Recommendation
+  },
+  // C. Carbon & Climate Configuration.
+  carbonClimate: {
+    co2SequesteredPerTreePerYearKg: 21,
+    carbonFractionOfCO2: 0.27,
+    o2ProducedPerTreePerYearKg: 118,
+    pm25FilteredPerTreePerYearKg: 0.1,
+    assumedLifetimeYears: 40,
+    socialCostOfCarbonBDTPerKg: 8,
+    carbonReductionMultiplier: 1.0,      // scales the reported GHG-reduction figure; 1.0 = no adjustment
+    forecastYears: [5, 10, 20],          // which future horizons Climate Intelligence projects CO2 removal for
+  },
+  // D. Tree Survival / Attrition.
+  survivalAttrition: {
+    assumedAnnualMortalityRatePct: 3,
+    // Reserved for the Scenario Simulator revision (manual-entry pass) —
+    // stored now with an inert (0 = no effect) default so adding them here
+    // changes nothing yet.
+    disasterLossAdjustmentPct: 0,
+    assumedReplacementRatePct: 0,
+  },
+  // E. Monitoring Thresholds.
+  monitoring: {
+    goodThresholdPct: 80,
+    warningThresholdPct: 60,   // this is the old "Poor Monitoring" risk cutoff
+    criticalThresholdPct: 40,
+  },
+  // Risk Assessment / Smart Alerts thresholds not already covered above.
+  risk: {
+    highMortalityPct: 15,
+    careBacklogCount: 10,
+    overdueMonitoringDays: 90,
+    overdueMonitoringCriticalPct: 40, // share of trees overdue at/above this = Critical alert (else High/Medium)
+    overdueMonitoringHighPct: 20,
+    careBacklogHighMultiplier: 2,     // careReq >= careBacklogCount × this = High severity (else Medium)
+  },
+  // Performance Ranking (Module 4).
+  ranking: {
+    minSampleSize: 5, // districts/upazillas below this tree count are excluded from Top/Bottom 10
+    weights: { survival: 0.5, monitoring: 0.3, costEfficiency: 0.2 }, // Overall Score composition
+  },
+  // Environmental Performance Index (Module 2) weight composition.
+  performanceIndexWeights: { survival: 0.5, monitoring: 0.3, backlog: 0.2 },
+  // F. GIS Intelligence — numeric threshold VALUES only (0–1 normalized).
+  // The visual legend/scale/color-swatch UI is a follow-up revision; these
+  // are the cutoffs that legend will read from once built.
+  gis: {
+    carbonBands: { excellent: 0.8, good: 0.6, moderate: 0.4, low: 0.2 }, // below 'low' = Critical
+    riskBands: { low: 0.25, medium: 0.5, high: 0.75 },                   // above 'high' = Critical
+    budgetBands: { low: 0.25, medium: 0.5, high: 0.75 },
+  },
+  // G. Climate Intelligence Configuration (forecast-related, distinct from
+  // the physical constants in carbonClimate above).
+  climateIntelligence: {
+    forecastConfidencePct: 70, // shown alongside projections as a plain-language confidence label
+  },
+};
+
+// H. References — deferred: this stays a flat, mostly-empty structure for
+// now (Source/URL/Notes/Effective Date per field) until the References UI
+// revision. Pre-seeding the one example the spec itself gave, so the shape
+// is proven correct before the UI is built on top of it.
+var DSS_CONFIGURATION_REFERENCES = {
+  'carbonClimate.socialCostOfCarbonBDTPerKg': {
+    title: 'IPCC AR6 — Social Cost of Carbon (planning placeholder)',
+    source: 'IPCC Sixth Assessment Report', url: '', notes: 'Used for Bangladesh forestry projects — revise with an official figure if available.', effectiveDate: '',
+  },
+};
+
+// ── Unified get/save/reset API — every DSS function reads through
+// getDssConfig(), never DSS_CONFIGURATION_DEFAULTS directly, and only
+// saveDssConfig()/resetDssConfig() ever write to storage. ─────────────────
+// Deep-clones `base` (so the result is always fully independent from
+// DSS_CONFIGURATION_DEFAULTS — safe for a caller to mutate directly, which
+// saveDssConfigForm() does), then deep-merges `overrides` on top.
+function deepClone(v) {
+  if (Array.isArray(v)) return v.slice();
+  if (v && typeof v === 'object') {
+    var out = {};
+    Object.keys(v).forEach(function(k){ out[k] = deepClone(v[k]); });
+    return out;
+  }
+  return v;
+}
+function deepMerge(base, overrides) {
+  var out = deepClone(base);
+  if (!overrides || typeof overrides !== 'object') return out;
+  Object.keys(overrides).forEach(function(k) {
+    if (base && typeof base[k] === 'object' && base[k] !== null && !Array.isArray(base[k]) && typeof overrides[k] === 'object') {
+      out[k] = deepMerge(base[k], overrides[k]);
+    } else if (overrides[k] !== undefined) {
+      out[k] = Array.isArray(overrides[k]) ? overrides[k].slice() : overrides[k];
+    }
+  });
+  return out;
+}
+function migrateLegacyDssConfig() {
+  // One-time fold-in of values saved during the earlier prototype phases,
+  // so nothing an admin already entered while testing gets silently lost.
+  var overrides = {};
+  try {
+    var legacyBudget = localStorage.getItem(DSS_LEGACY_BUDGET_KEY);
+    if (legacyBudget !== null && legacyBudget !== '' && !isNaN(+legacyBudget)) {
+      overrides.budget = { totalAllocatedBDT: +legacyBudget };
+    }
+    var legacyRate = localStorage.getItem(DSS_LEGACY_ATTRITION_KEY);
+    if (legacyRate !== null && legacyRate !== '' && !isNaN(+legacyRate)) {
+      overrides.survivalAttrition = { assumedAnnualMortalityRatePct: +legacyRate };
+    }
+  } catch (e) {}
+  return overrides;
+}
+function getDssConfig() {
+  var saved = null;
+  try {
+    var raw = localStorage.getItem(DSS_CONFIGURATION_STORAGE_KEY);
+    if (raw) saved = JSON.parse(raw);
+  } catch (e) {}
+  if (!saved) saved = migrateLegacyDssConfig(); // first-ever load: fold in old keys as the starting overrides
+  return deepMerge(DSS_CONFIGURATION_DEFAULTS, saved || {});
+}
+function saveDssConfig(newConfig) {
+  try { localStorage.setItem(DSS_CONFIGURATION_STORAGE_KEY, JSON.stringify(newConfig)); return true; } catch (e) { return false; }
+}
+function resetDssConfigToDefaults() {
+  try { localStorage.removeItem(DSS_CONFIGURATION_STORAGE_KEY); } catch (e) {}
+}
+
+// Pulls whatever an HQ Admin last saved to the backend (DSS_Config sheet,
+// via apiCall('getDssConfig')) and caches it into localStorage so the rest
+// of the app — which reads getDssConfig() synchronously everywhere — keeps
+// working exactly as before, just fed from the shared/global copy instead
+// of only this device's own. Every logged-in role can READ this now (so
+// Circle/District/Upazila Executive DSS views use the same national
+// assumptions HQ Admin configured) — only actionSaveDssConfig stays
+// admin-gated on the backend. Requires actionGetDssConfig's own admin-only
+// check to be relaxed to "any authenticated requester" server-side; see the
+// matching Code.gs change.
+function syncDssConfigFromBackend() {
+  if (!backendConfigured()) return Promise.resolve();
+  return apiCall('getDssConfig', {}).then(function(res) {
+    if (res && res.ok && res.config) {
+      saveDssConfig(res.config);
+      if (document.getElementById('page-dss-config') && document.getElementById('page-dss-config').classList.contains('active')) { renderDssConfigPage(); }
+      if (typeof renderDssConfigSummaryBar === 'function') renderDssConfigSummaryBar();
+    }
+  });
+}
+
+// ── DSS Configuration page — schema-driven form ──────────────────────
+// One declarative list drives rendering, reading current values, writing
+// edited values back by dot-path, and validating — adding a new
+// configurable value anywhere in the DSS means adding one entry here, not
+// hand-writing another input block.
+var DSS_CONFIG_FORM_SCHEMA = [
+  { category: 'A. Performance Score Bands (Environmental Performance Index)', fields: [
+    { path: 'performanceBands.excellentMin', label: 'Excellent (minimum score)', min: 0, max: 100, step: 1, unit: '' },
+    { path: 'performanceBands.goodMin', label: 'Good (minimum score)', min: 0, max: 100, step: 1, unit: '' },
+    { path: 'performanceBands.moderateMin', label: 'Moderate (minimum score, below = Critical)', min: 0, max: 100, step: 1, unit: '' },
+  ]},
+  { category: 'B. Budget Allocation &amp; Thresholds', fields: [
+    { path: 'budget.totalAllocatedBDT', label: 'Total Allocated Budget', min: 0, step: 1000, unit: 'BDT' },
+    { path: 'budget.avgAnnualMaintenanceCostPerTreeBDT', label: 'Avg. Annual Maintenance Cost / Tree', min: 0, step: 1, unit: 'BDT' },
+    { path: 'budget.excellentRoiPct', label: 'Excellent ROI (minimum) — Admin-only card', min: 0, max: 1000, step: 0.5, unit: '%' },
+    { path: 'budget.acceptableRoiPct', label: 'Acceptable ROI (minimum, below = Low) — Admin-only card', min: 0, max: 1000, step: 0.5, unit: '%' },
+    { path: 'budget.budgetWarningRemainingPct', label: 'Budget Warning — remaining below', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'budget.budgetUtilizationWarningPct', label: 'Budget Utilization Warning — spent above', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'budget.investmentPriorityCount', label: 'Investment Priority Count (bottom-N districts)', min: 1, max: 20, step: 1, unit: '' },
+  ]},
+  { category: 'C. Carbon &amp; Climate Configuration', fields: [
+    { path: 'carbonClimate.co2SequesteredPerTreePerYearKg', label: 'CO₂ Sequestered / Tree / Year', min: 0, step: 0.1, unit: 'kg' },
+    { path: 'carbonClimate.carbonFractionOfCO2', label: 'Carbon Fraction of CO₂', min: 0, max: 1, step: 0.01, unit: '' },
+    { path: 'carbonClimate.o2ProducedPerTreePerYearKg', label: 'O₂ Produced / Tree / Year', min: 0, step: 0.1, unit: 'kg' },
+    { path: 'carbonClimate.pm25FilteredPerTreePerYearKg', label: 'PM2.5 Filtered / Tree / Year', min: 0, step: 0.01, unit: 'kg' },
+    { path: 'carbonClimate.assumedLifetimeYears', label: 'Assumed Tree Lifetime', min: 1, max: 200, step: 1, unit: 'years' },
+    { path: 'carbonClimate.socialCostOfCarbonBDTPerKg', label: 'Social Cost of Carbon', min: 0, step: 0.5, unit: 'BDT/kg' },
+    { path: 'carbonClimate.carbonReductionMultiplier', label: 'Carbon Reduction Multiplier (Greenhouse Gas Reduction only)', min: 0, max: 10, step: 0.1, unit: '×' },
+    { path: 'carbonClimate.forecastYears', label: 'Forecast Years (comma-separated)', type: 'list', unit: 'years' },
+  ]},
+  { category: 'D. Tree Survival / Attrition', fields: [
+    { path: 'survivalAttrition.assumedAnnualMortalityRatePct', label: 'Assumed Annual Attrition Rate', min: 0, max: 100, step: 0.5, unit: '%' },
+    { path: 'survivalAttrition.disasterLossAdjustmentPct', label: 'Disaster Loss Adjustment (reserved — Scenario Simulator revision)', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'survivalAttrition.assumedReplacementRatePct', label: 'Assumed Replacement Rate (reserved — Scenario Simulator revision)', min: 0, max: 100, step: 1, unit: '%' },
+  ]},
+  { category: 'E. Monitoring Thresholds', fields: [
+    { path: 'monitoring.goodThresholdPct', label: 'Good (minimum)', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'monitoring.warningThresholdPct', label: 'Warning (minimum) — the "Poor Monitoring" risk cutoff', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'monitoring.criticalThresholdPct', label: 'Critical (minimum)', min: 0, max: 100, step: 1, unit: '%' },
+  ]},
+  { category: 'Risk Assessment &amp; Smart Alerts', fields: [
+    { path: 'risk.highMortalityPct', label: 'High Mortality Threshold', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'risk.careBacklogCount', label: 'Care Backlog Threshold', min: 1, step: 1, unit: 'trees' },
+    { path: 'risk.overdueMonitoringDays', label: 'Overdue Monitoring Threshold', min: 1, step: 1, unit: 'days' },
+    { path: 'risk.overdueMonitoringCriticalPct', label: 'Overdue Monitoring — Critical alert above', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'risk.overdueMonitoringHighPct', label: 'Overdue Monitoring — High alert above', min: 0, max: 100, step: 1, unit: '%' },
+    { path: 'risk.careBacklogHighMultiplier', label: 'Care Backlog — High severity multiplier', min: 1, step: 0.1, unit: '×' },
+  ]},
+  { category: 'Performance Ranking &amp; Environmental Performance Index Weights', fields: [
+    { path: 'ranking.minSampleSize', label: 'Minimum Sample Size', min: 1, step: 1, unit: 'trees' },
+    { path: 'ranking.weights.survival', label: 'Ranking Weight — Survival', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'ranking.weights.monitoring', label: 'Ranking Weight — Monitoring', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'ranking.weights.costEfficiency', label: 'Ranking Weight — Cost Efficiency', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'performanceIndexWeights.survival', label: 'EPI Weight — Survival', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'performanceIndexWeights.monitoring', label: 'EPI Weight — Monitoring', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'performanceIndexWeights.backlog', label: 'EPI Weight — Care Backlog Health', min: 0, max: 1, step: 0.05, unit: '' },
+  ]},
+  { category: 'F. GIS Intelligence — Color Band Thresholds (0–1 normalized; visual legend/scale UI is a follow-up revision)', fields: [
+    { path: 'gis.carbonBands.excellent', label: 'Carbon — Excellent (minimum)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.carbonBands.good', label: 'Carbon — Good (minimum)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.carbonBands.moderate', label: 'Carbon — Moderate (minimum)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.carbonBands.low', label: 'Carbon — Low (minimum, below = Critical)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.riskBands.low', label: 'Risk — Low (maximum)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.riskBands.medium', label: 'Risk — Medium (maximum)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.riskBands.high', label: 'Risk — High (maximum, above = Critical)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.budgetBands.low', label: 'Budget — Low (maximum)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.budgetBands.medium', label: 'Budget — Medium (maximum)', min: 0, max: 1, step: 0.05, unit: '' },
+    { path: 'gis.budgetBands.high', label: 'Budget — High (maximum, above = Critical)', min: 0, max: 1, step: 0.05, unit: '' },
+  ]},
+  { category: 'G. Climate Intelligence — Forecasting', fields: [
+    { path: 'climateIntelligence.forecastConfidencePct', label: 'Forecast Confidence (displayed label)', min: 0, max: 100, step: 1, unit: '%' },
+  ]},
+];
+function getByPath(obj, path) {
+  return path.split('.').reduce(function(o, k){ return (o === null || o === undefined) ? undefined : o[k]; }, obj);
+}
+function setByPath(obj, path, value) {
+  var keys = path.split('.');
+  var cur = obj;
+  for (var i = 0; i < keys.length - 1; i++) {
+    if (typeof cur[keys[i]] !== 'object' || cur[keys[i]] === null) cur[keys[i]] = {};
+    cur = cur[keys[i]];
+  }
+  cur[keys[keys.length - 1]] = value;
+}
+function dssCfgInputId(path) { return 'dsscfg__' + path.replace(/\./g, '__'); }
+
+// ── H. References / citations ────────────────────────────────────────
+// Separate storage from the config values themselves (references are
+// metadata ABOUT a field, not a value the DSS calculates with). Defaults
+// come from DSS_CONFIGURATION_REFERENCES (currently just the one pre-seeded
+// Social Cost of Carbon example); saved edits layer on top, keyed by the
+// same dot-path used everywhere else in the config system.
+var DSS_REFERENCES_STORAGE_KEY = 'dphe_dss_references_v1';
+function getDssReferences() {
+  var saved = {};
+  try { var raw = localStorage.getItem(DSS_REFERENCES_STORAGE_KEY); if (raw) saved = JSON.parse(raw); } catch (e) {}
+  return Object.assign({}, DSS_CONFIGURATION_REFERENCES, saved);
+}
+function saveDssReferencesStore(refs) {
+  try { localStorage.setItem(DSS_REFERENCES_STORAGE_KEY, JSON.stringify(refs)); } catch (e) {}
+}
+function toggleDssRefPanel(inputId) {
+  var panel = document.getElementById(inputId + '__refpanel');
+  if (!panel) return;
+  panel.style.display = (panel.style.display === 'none' || !panel.style.display) ? 'block' : 'none';
+}
+function saveDssReference(path, inputId) {
+  var refs = getDssReferences();
+  refs[path] = {
+    title: document.getElementById(inputId + '__ref_title').value.trim(),
+    source: document.getElementById(inputId + '__ref_source').value.trim(),
+    url: document.getElementById(inputId + '__ref_url').value.trim(),
+    notes: document.getElementById(inputId + '__ref_notes').value.trim(),
+    effectiveDate: document.getElementById(inputId + '__ref_date').value,
+  };
+  saveDssReferencesStore(refs);
+  renderDssConfigPage();
+}
+function clearDssReference(path, inputId) {
+  var refs = getDssReferences();
+  delete refs[path];
+  saveDssReferencesStore(refs);
+  renderDssConfigPage();
+}
+function renderDssConfigPage() {
+  if (!SESSION || SESSION.role !== 'admin') return;
+  var el = document.getElementById('dss-config-content');
+  if (!el) return;
+  var cfg = getDssConfig();
+  var refs = getDssReferences();
+  el.innerHTML = DSS_CONFIG_FORM_SCHEMA.map(function(section) {
+    var fieldsHtml = section.fields.map(function(f) {
+      var raw = getByPath(cfg, f.path);
+      var inputId = dssCfgInputId(f.path);
+      var ref = refs[f.path] || {};
+      var hasRef = !!(ref.title || ref.source || ref.url || ref.notes || ref.effectiveDate);
+      var refToggle = ' <a href="javascript:void(0)" onclick="toggleDssRefPanel(\'' + inputId + '\')" style="font-size:11px;text-decoration:none" title="' + (hasRef ? escapeHtml(ref.title || 'Reference saved') : 'Add a reference / citation') + '">' + (hasRef ? '📎' : '➕📎') + '</a>';
+      var labelHtml = escapeHtml(f.label) + (f.unit ? ' (' + escapeHtml(f.unit) + ')' : '') + refToggle;
+      var inputHtml = f.type === 'list'
+        ? '<input type="text" id="' + inputId + '" value="' + escapeHtml(Array.isArray(raw) ? raw.join(', ') : '') + '" placeholder="e.g. 5, 10, 20">'
+        : '<input type="number" id="' + inputId + '" value="' + raw + '"' + (f.min !== undefined ? ' min="' + f.min + '"' : '') + (f.max !== undefined ? ' max="' + f.max + '"' : '') + (f.step !== undefined ? ' step="' + f.step + '"' : '') + '>';
+      var refPanelHtml =
+        '<div id="' + inputId + '__refpanel" style="display:none;margin-top:6px;padding:8px;background:#f7f9fb;border:1px solid #e0e6ea;border-radius:6px">' +
+          '<input type="text" id="' + inputId + '__ref_title" placeholder="Reference title (e.g. IPCC AR6)" value="' + escapeHtml(ref.title || '') + '" style="width:100%;margin-bottom:4px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;font-size:11px">' +
+          '<input type="text" id="' + inputId + '__ref_source" placeholder="Source / publication" value="' + escapeHtml(ref.source || '') + '" style="width:100%;margin-bottom:4px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;font-size:11px">' +
+          '<input type="text" id="' + inputId + '__ref_url" placeholder="URL" value="' + escapeHtml(ref.url || '') + '" style="width:100%;margin-bottom:4px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;font-size:11px">' +
+          '<textarea id="' + inputId + '__ref_notes" placeholder="Notes" style="width:100%;margin-bottom:4px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;font-size:11px;min-height:34px">' + escapeHtml(ref.notes || '') + '</textarea>' +
+          '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+            '<label style="font-size:10px;color:#888">Effective date:</label>' +
+            '<input type="date" id="' + inputId + '__ref_date" value="' + escapeHtml(ref.effectiveDate || '') + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px">' +
+            '<button class="btn btn-sm" onclick="saveDssReference(\'' + f.path + '\',\'' + inputId + '\')">💾 Save Reference</button>' +
+            '<button class="btn btn-sm" onclick="clearDssReference(\'' + f.path + '\',\'' + inputId + '\')">🗑️ Clear</button>' +
+          '</div>' +
+        '</div>';
+      return '<div class="fg"><label>' + labelHtml + '</label>' + inputHtml + refPanelHtml + '</div>';
+    }).join('');
+    return '<div class="card" style="margin-bottom:14px"><div class="card-title" style="font-size:13px">' + section.category + '</div>' +
+      '<div class="form-grid" style="grid-template-columns:repeat(3,1fr)">' + fieldsHtml + '</div></div>';
+  }).join('');
+  var statusEl = document.getElementById('dss-config-status');
+  if (statusEl) statusEl.textContent = '';
+}
+function validateDssConfigDraft(cfg) {
+  var errors = [];
+  var b = cfg.performanceBands;
+  if (!(b.excellentMin > b.goodMin && b.goodMin > b.moderateMin)) errors.push('Performance Score Bands must be strictly decreasing: Excellent &gt; Good &gt; Moderate.');
+  var m = cfg.monitoring;
+  if (!(m.goodThresholdPct > m.warningThresholdPct && m.warningThresholdPct > m.criticalThresholdPct)) errors.push('Monitoring Thresholds must be strictly decreasing: Good &gt; Warning &gt; Critical.');
+  if (!(cfg.budget.excellentRoiPct >= cfg.budget.acceptableRoiPct)) errors.push('Excellent ROI threshold must be ≥ Acceptable ROI threshold.');
+  var cb = cfg.gis.carbonBands;
+  if (!(cb.excellent > cb.good && cb.good > cb.moderate && cb.moderate > cb.low)) errors.push('GIS Carbon Bands must be strictly decreasing: Excellent &gt; Good &gt; Moderate &gt; Low.');
+  var rb = cfg.gis.riskBands;
+  if (!(rb.low < rb.medium && rb.medium < rb.high)) errors.push('GIS Risk Bands must be strictly increasing: Low &lt; Medium &lt; High.');
+  var bb = cfg.gis.budgetBands;
+  if (!(bb.low < bb.medium && bb.medium < bb.high)) errors.push('GIS Budget Bands must be strictly increasing: Low &lt; Medium &lt; High.');
+  DSS_CONFIG_FORM_SCHEMA.forEach(function(section) {
+    section.fields.forEach(function(f) {
+      if (f.type === 'list') { var v = getByPath(cfg, f.path); if (!Array.isArray(v) || !v.length) errors.push(f.label + ' must have at least one value.'); return; }
+      var val = getByPath(cfg, f.path);
+      if (typeof val !== 'number' || isNaN(val)) { errors.push(f.label + ' must be a valid number.'); return; }
+      if (f.min !== undefined && val < f.min) errors.push(f.label + ' must be ≥ ' + f.min + '.');
+      if (f.max !== undefined && val > f.max) errors.push(f.label + ' must be ≤ ' + f.max + '.');
+    });
+  });
+  return errors;
+}
+function saveDssConfigForm() {
+  var cfg = getDssConfig();
+  DSS_CONFIG_FORM_SCHEMA.forEach(function(section) {
+    section.fields.forEach(function(f) {
+      var inputEl = document.getElementById(dssCfgInputId(f.path));
+      if (!inputEl) return;
+      if (f.type === 'list') {
+        var list = inputEl.value.split(',').map(function(s){ return parseFloat(s.trim()); }).filter(function(n){ return !isNaN(n); });
+        setByPath(cfg, f.path, list.length ? list : getByPath(DSS_CONFIGURATION_DEFAULTS, f.path));
+      } else {
+        setByPath(cfg, f.path, parseFloat(inputEl.value));
+      }
+    });
+  });
+  var errors = validateDssConfigDraft(cfg);
+  var statusEl = document.getElementById('dss-config-status');
+  if (errors.length) {
+    if (statusEl) { statusEl.innerHTML = errors.map(function(e){ return '⚠️ ' + e; }).join('<br>'); statusEl.style.color = '#c62828'; }
+    return;
+  }
+  // Save locally first (instant, works offline) — this is what made the
+  // config "local only" before. Then push the SAME object to the backend
+  // (action: saveDssConfig, in the DSS_Config sheet) so every other HQ
+  // Admin login/device picks it up too via syncDssConfigFromBackend().
+  saveDssConfig(cfg);
+  if (statusEl) { statusEl.textContent = '💾 Saved locally — syncing…'; statusEl.style.color = '#888'; }
+  if (!backendConfigured()) {
+    if (statusEl) { statusEl.textContent = '✅ Configuration saved (local test mode — no backend, so this stays on this device only).'; statusEl.style.color = '#2d8a42'; }
+    return;
+  }
+  apiCall('saveDssConfig', { config: cfg }).then(function(res) {
+    var ok = !!(res && res.ok);
+    if (!statusEl) return;
+    if (ok) {
+      statusEl.textContent = '✅ Configuration saved and synced — every user/device now uses these values.';
+      statusEl.style.color = '#2d8a42';
+    } else {
+      statusEl.innerHTML = '⚠️ Saved on this device, but sync to the backend failed (' + escapeHtml((res && res.error) || 'unknown') + '). Other users will keep using their own copy until this syncs.';
+      statusEl.style.color = '#c62828';
+    }
+  });
+}
+function resetDssConfigForm() {
+  if (!confirm('Reset ALL DSS Configuration values to their defaults? This cannot be undone.')) return;
+  resetDssConfigToDefaults();
+  renderDssConfigPage();
+  var statusEl = document.getElementById('dss-config-status');
+  if (statusEl) { statusEl.textContent = '💾 Reset locally — syncing…'; statusEl.style.color = '#888'; }
+  if (!backendConfigured()) {
+    if (statusEl) { statusEl.textContent = '✅ Reset to defaults (local test mode — no backend, so this stays on this device only).'; statusEl.style.color = '#2d8a42'; }
+    return;
+  }
+  // Push the reset (back to defaults) to every device too. The backend
+  // requires a real object for `config` (an empty/null payload is rejected
+  // as invalid), so send the actual defaults rather than trying to signal
+  // "clear" — the effect is identical since getDssConfig() merges saved
+  // overrides on top of these same defaults anyway.
+  apiCall('saveDssConfig', { config: deepClone(DSS_CONFIGURATION_DEFAULTS) }).then(function(res) {
+    var ok = !!(res && res.ok);
+    if (!statusEl) return;
+    if (ok) {
+      statusEl.textContent = '✅ Reset to defaults and synced — every user/device now uses these values.';
+      statusEl.style.color = '#2d8a42';
+    } else {
+      statusEl.innerHTML = '⚠️ Reset on this device, but sync to the backend failed (' + escapeHtml((res && res.error) || 'unknown') + ').';
+      statusEl.style.color = '#c62828';
+    }
+  });
+}
 
 /* ════════════════════════════════════════════════════════════════════
    GRANULAR / FIELD-LEVEL PERMISSION SYSTEM
@@ -1849,12 +2447,9 @@ function hasFieldPerm(slug, mode) {
   return mode === 'edit' ? !!p.edit : !!(p.view || p.edit);
 }
 
-// SECURITY: no hardcoded accounts are shipped in the production file.
-// This app is backend-configured (APPS_SCRIPT_URL is set above), so real users
-// are always loaded from Google Sheets via loadAllFromSheets() -> apiCall('getAll').
-// If you need to smoke-test this file locally with APPS_SCRIPT_URL left empty,
-// temporarily add test accounts here on your own machine — never commit real or
-// guessable passwords back into this file. See SETUP_GUIDE.md for local testing.
+// Real users are always loaded from Google Sheets via loadAllFromSheets() ->
+// apiCall('getAll'), since APPS_SCRIPT_URL is set above. No demo/test
+// accounts are shipped in this file.
 var users = [];
 
 var editingPermUserIdx = null; // কোন user-এর পারমিশন এডিট করা হচ্ছে
@@ -2328,7 +2923,7 @@ function viewRecord(id) {
       '<div><span style="color:#888">Caregiver | পরিচর্যাকারী</span><br><b>' + escapeHtml(r.caregiver || 'N/A') + '</b></div>' +
       '<div><span style="color:#888">Contact | মোবাইল</span><br><b>' + escapeHtml(r.caregiverPhone || 'N/A') + '</b></div>' +
       '<div><span style="color:#888">Funding | অর্থায়ন</span><br><b>' + escapeHtml(fundLabelOf(r.fund) || 'N/A') + '</b></div>' +
-      '<div><span style="color:#888">Cost | খরচ</span><br><b>৳ ' + (r.cost || 0).toLocaleString() + '</b></div>' +
+      '<div><span style="color:#888">Cost | খরচ</span><br><b>BDT ' + (r.cost || 0).toLocaleString() + '</b></div>' +
       '<div><span style="color:#888">Status | অবস্থা</span><br><span class="status-pill ' + statusClass(r.status) + '">' + statusLabel(r.status) + '</span></div>' +
       '<div><span style="color:#888">GPS</span><br><b>' + escapeHtml(r.lat || 'N/A') + ', ' + escapeHtml(r.lon || 'N/A') + '</b></div>' +
       '<div style="grid-column:1/-1"><span style="color:#888">Care/Maintenance Activity | কার্যক্রম</span><br>' + escapeHtml(r.remarks || 'None') + '</div>' +
@@ -2382,7 +2977,7 @@ function buildMonRow(r) {
   var hasInitialPhoto = r.photos && r.photos.length > 0;
   var photoCell = hasInitialPhoto
     ? '<div style="font-size:10px;color:#2d8a42;font-weight:700;text-align:center">✅ Initial photo<br>saved 🔒' +
-        (hasPerm('edit') ? '<br><a href="javascript:void(0)" onclick="deleteInitialPhoto(\'' + r.id + '\')" style="font-size:9px;color:#c62828;font-weight:400;text-decoration:underline">🗑️ Delete Picture</a>' : '') +
+        (hasPerm('edit') ? '<br><a href="javascript:void(0)" onclick="deleteInitialPhoto(\'' + r.id + '\')" style="font-size:9px;color:#c62828;font-weight:400;text-decoration:underline">🗑️ ভুল হলে মুছুন</a>' : '') +
       '</div>'
     : '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">' +
         '<button class="mon-photo-btn" onclick="triggerMonPhoto(\'' + r.id + '\')">📸 Add Initial Photo</button>' +
@@ -2977,6 +3572,24 @@ function editMonVisitFromHistory(recordId, visitIdx) {
   openMonModalEdit(recordId, visitIdx);
 }
 
+// A monitoring visit (add/edit/delete) can change r.status while the SAME tree
+// is also open in the Add Tree Record form (inline monitoring editor). That
+// form's own #f-status dropdown was populated once, when editRecord() first
+// opened it, and never refreshed — so if the officer later clicks "Update
+// Record", saveRecord() reads the now-stale #f-status value and stomps
+// r.status right back to whatever it was before the monitoring edit. Keeping
+// the dropdown in sync here (whenever it's this same record being edited)
+// closes that hole.
+function syncFStatusFieldFromRecord(r) {
+  var editBtn = document.getElementById('save-record-btn');
+  if (!editBtn || editBtn.getAttribute('data-edit-id') !== r.id) return;
+  var stSel = document.getElementById('f-status');
+  if (!stSel) return;
+  for (var i = 0; i < stSel.options.length; i++) {
+    if (stSel.options[i].value === r.status) { stSel.selectedIndex = i; break; }
+  }
+}
+
 function deleteMonVisit(recordId, visitIdx) {
   var r = records.find(x => x.id === recordId);
   if (!r || !r.monitoring) return;
@@ -2991,6 +3604,7 @@ function deleteMonVisit(recordId, visitIdx) {
     var latest = r.monitoring.slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); })[0];
     r.status = latest.status;
   }
+  syncFStatusFieldFromRecord(r);
   renderMonitoring();
   renderRecords();
   initDashboard();
@@ -3114,6 +3728,7 @@ function saveMonitoringVisit() {
   var allSorted = r.monitoring.slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
   var latestStatus = allSorted[0] ? allSorted[0].status : status;
   r.status = latestStatus;
+  syncFStatusFieldFromRecord(r);
 
   currentMonEditIndex = null;
   closeMonModal();
@@ -3317,6 +3932,10 @@ function addAllMarkers() {
 
 function centerMapBangladesh() {
   if (leafletMap) leafletMap.setView([23.6850, 90.3563], 7);
+}
+
+function centerDssMapBangladesh() {
+  if (dssLeafletMap) dssLeafletMap.setView([23.6850, 90.3563], 7);
 }
 
 // Half-donut (semicircle) chart via a clipped conic-gradient circle — no
@@ -5330,6 +5949,20 @@ function applySidebarPermissions() {
     adminSec.style.display = show ? '' : 'none';
     adminMenu.style.display = show ? '' : 'none';
   }
+  // Executive DSS: now a normal per-user permission ('dss', toggleable in
+  // User Management just like Reports/Records/etc.) — Circle/District/
+  // Upazila users who have it checked see their own scoped data (see
+  // renderDSSPage()/dssRecords()). DSS Configuration (editing the
+  // thresholds/assumptions) stays a separate, hard HQ-Admin-only gate below
+  // — that one is intentionally NOT a checkbox, so it can never be granted
+  // to a non-admin by mistake; the backend enforces this too
+  // (actionSaveDssConfig).
+  var dssItem = document.getElementById('sidebar-dss');
+  if (dssItem) dssItem.style.display = hasPerm('dss') ? '' : 'none';
+  var dssBadge = document.getElementById('sidebar-dss-badge');
+  if (dssBadge) dssBadge.textContent = (SESSION.role === 'admin') ? 'HQ' : 'MY SCOPE';
+  var dssConfigItem = document.getElementById('sidebar-dss-config');
+  if (dssConfigItem) dssConfigItem.style.display = (SESSION.role === 'admin') ? '' : 'none';
 }
 
 // ── Scope banner ────────────────────────────────────────────────────
@@ -5620,6 +6253,1381 @@ function renderReportsPage() {
   var out = document.getElementById('report-output');
   if (out) out.style.display = 'none';
   renderReportScopeControls();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// EXECUTIVE DECISION SUPPORT SYSTEM (HQ Admin only)
+// ════════════════════════════════════════════════════════════════════
+// PHASE 0 confirmed the wiring (sidebar item, hard role gate, routing). This
+// function now does the real work; showPage()/applySidebarPermissions() are
+// unchanged from Phase 0 and still hard-gate this to SESSION.role==='admin'.
+function renderDSSPage() {
+  if (!SESSION || !SESSION.role) return; // must be logged in; DSS Config editing itself stays admin-gated elsewhere
+  initDssFilterBarOnce();
+  renderDssFilterSummary();
+  renderDssConfigSummaryBar();
+  var scoped = dssRecords();
+  var kpis = computeExecutiveKPIs(scoped);
+  renderExecutiveKPIs(kpis);
+  var epi = computeEnvironmentalPerformanceIndex(kpis);
+  renderEnvironmentalPerformanceIndex(epi);
+  var circleRisks = computeCircleRiskAssessment(scoped);
+  var alerts = computeSmartAlerts(scoped, kpis, circleRisks);
+  renderSmartAlerts(alerts);
+  renderCircleRiskAssessment(circleRisks);
+  var rankings = {
+    circles: computeRegionRankings(scoped, function(r){ return r.div; }),
+    districts: computeRegionRankings(scoped, function(r){ return r.dis; }),
+    upazillas: computeRegionRankings(scoped, function(r){ return r.upa; }),
+  };
+  renderExecutiveRecommendations(computeExecutiveRecommendations(circleRisks, rankings.districts, alerts, kpis));
+  renderPerformanceRanking(rankings);
+  var climate = computeClimateIntelligence(scoped);
+  renderClimateIntelligence(climate);
+  var budget = computeBudgetIntelligence(scoped, kpis, climate);
+  renderBudgetIntelligence(budget);
+  renderPredictiveAnalytics(computePredictiveAnalytics(kpis));
+  renderScenarioSimulator(kpis, budget);
+  initDssMapOnce();
+  renderDssGisLayer(scoped, kpis, circleRisks, rankings.circles);
+}
+// Read-only strip showing the handful of admin-entered assumptions this page
+// depends on (Total Allocated Budget, Attrition Rate), with a link to the
+// new DSS Configuration page where they're actually edited. Nothing here is
+// an input — editing happens in exactly one place now.
+function renderDssConfigSummaryBar() {
+  var el = document.getElementById('dss-config-summary-bar');
+  if (!el) return;
+  var cfg = getDssConfig();
+  var isAdmin = (SESSION.role === 'admin');
+  el.innerHTML =
+    '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">' +
+      '<div class="kpi-card"><div class="kpi-val">BDT ' + fmtBDT(cfg.budget.totalAllocatedBDT) + '</div><div class="kpi-label">Total Allocated Budget</div><div class="kpi-sub">National, set in DSS Configuration</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val">' + cfg.survivalAttrition.assumedAnnualMortalityRatePct + '%/yr</div><div class="kpi-label">Assumed Attrition Rate</div><div class="kpi-sub">Used for survival projections</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val">BDT ' + cfg.carbonClimate.socialCostOfCarbonBDTPerKg + '/kg</div><div class="kpi-label">Social Cost of Carbon</div><div class="kpi-sub">Used for CO₂ valuation</div></div>' +
+    '</div>' +
+    (isAdmin ?
+      '<div class="no-print" style="text-align:right;margin:-8px 0 14px"><button class="btn btn-sm" onclick="showPage(\'dss-config\', document.getElementById(\'sidebar-dss-config\'))">⚙️ Edit in DSS Configuration →</button></div>' :
+      '<div style="font-size:11px;color:#aaa;margin:-8px 0 14px">These assumptions are set nationally by HQ Admin and apply to every view.</div>');
+}
+
+// ── Small shared math/format helpers (used by Module 1 now, and by later
+// DSS modules — Risk, Ranking, Predictive — so they live here once) ──────
+function pctGrowth(curr, prev) {
+  if (!prev) return curr > 0 ? 100 : 0;
+  return (curr - prev) / prev * 100;
+}
+function dssGrowthBadge(pct) {
+  var rounded = Math.round(pct * 10) / 10;
+  var up = pct >= 0;
+  return '<span style="color:' + (up ? '#2d8a42' : '#c62828') + ';font-weight:700">' +
+    (up ? '▲' : '▼') + ' ' + Math.abs(rounded) + '%</span>';
+}
+// Returns a .kpi-card color class ('', 'amber', 'red') for a value where
+// HIGHER is better (e.g. survival %, monitoring completion %).
+function dssTierHigherBetter(value, goodMin, warnMin) {
+  if (value >= goodMin) return '';
+  if (value >= warnMin) return 'amber';
+  return 'red';
+}
+
+// ── Module 1: Executive KPIs ─────────────────────────────────────────
+// Takes the already-filtered record set from dssRecords() (Phase 3) — falls
+// back to the full national `records` array if called without one, so
+// nothing that already called computeExecutiveKPIs() before Phase 3 breaks.
+function computeExecutiveKPIs(recs) {
+  recs = recs || records;
+  var total = recs.length;
+  var alive = recs.filter(function(r){ return r.status === 'Alive'; }).length;
+  var dead = recs.filter(function(r){ return r.status === 'Dead'; }).length;
+  var careReq = recs.filter(function(r){ return r.status === 'Care Required'; }).length;
+  var survivalPct = total > 0 ? (alive / total * 100) : 0;
+  var monitored = recs.filter(function(r){ return r.monitoring && r.monitoring.length > 0; }).length;
+  var monitoringCompletionPct = total > 0 ? (monitored / total * 100) : 0;
+
+  var budgetUsed = costSum(recs); // existing helper (Reports section)
+  var totalAllocated = getDssConfig().budget.totalAllocatedBDT;
+  var budgetRemaining = totalAllocated - budgetUsed;
+  var costPerTree = total > 0 ? (budgetUsed / total) : 0;
+
+  // Per-circle and per-district rollups, for Best/Worst Circle, Best
+  // District, Highest Mortality. District grouping matches `dis` alone —
+  // the same convention canMutateRecord()/scopedRecords() already use for
+  // the 'district' role, i.e. this app already treats district names as
+  // nationally unique on their own (only upazila names repeat and need the
+  // paired dis+upa match, per this file's own header notes).
+  function groupBy(keyFn) {
+    var groups = {};
+    recs.forEach(function(r) {
+      var k = keyFn(r);
+      if (!k) return;
+      if (!groups[k]) groups[k] = { name: k, total: 0, alive: 0, dead: 0 };
+      groups[k].total++;
+      if (r.status === 'Alive') groups[k].alive++;
+      if (r.status === 'Dead') groups[k].dead++;
+    });
+    return Object.keys(groups).map(function(k) {
+      var g = groups[k];
+      g.survivalPct = g.total > 0 ? (g.alive / g.total * 100) : 0;
+      g.mortalityPct = g.total > 0 ? (g.dead / g.total * 100) : 0;
+      return g;
+    });
+  }
+  var circleGroups = groupBy(function(r){ return r.div; });
+  var districtGroups = groupBy(function(r){ return r.dis; });
+  var bestCircle = circleGroups.length ? circleGroups.slice().sort(function(a,b){ return b.survivalPct - a.survivalPct; })[0] : null;
+  var worstCircle = circleGroups.length ? circleGroups.slice().sort(function(a,b){ return a.survivalPct - b.survivalPct; })[0] : null;
+  var bestDistrict = districtGroups.length ? districtGroups.slice().sort(function(a,b){ return b.survivalPct - a.survivalPct; })[0] : null;
+  var highestMortalityDistrict = districtGroups.length ? districtGroups.slice().sort(function(a,b){ return b.mortalityPct - a.mortalityPct; })[0] : null;
+
+  // Monthly / Annual growth — anchored to the latest plantation date found in
+  // the data (same convention buildScopedMonthlyChart() already uses for its
+  // 12-month trend), not "today's real date", so this stays meaningful even
+  // against static/demo data whose dates don't reach up to today.
+  var dates = recs.map(function(r){ return r.date; }).filter(Boolean).sort();
+  var monthlyGrowthPct = 0, annualGrowthPct = 0;
+  if (dates.length > 0) {
+    var latest = new Date(dates[dates.length - 1]);
+    var curY = latest.getFullYear(), curM = latest.getMonth();
+    var prevM = curM - 1, prevMY = curY; if (prevM < 0) { prevM = 11; prevMY = curY - 1; }
+    var curMonthCount = recs.filter(function(r){ if(!r.date) return false; var d = new Date(r.date); return d.getFullYear()===curY && d.getMonth()===curM; }).length;
+    var prevMonthCount = recs.filter(function(r){ if(!r.date) return false; var d = new Date(r.date); return d.getFullYear()===prevMY && d.getMonth()===prevM; }).length;
+    monthlyGrowthPct = pctGrowth(curMonthCount, prevMonthCount);
+
+    var curYearCount = recs.filter(function(r){ return r.date && new Date(r.date).getFullYear() === curY; }).length;
+    var prevYearCount = recs.filter(function(r){ return r.date && new Date(r.date).getFullYear() === curY - 1; }).length;
+    annualGrowthPct = pctGrowth(curYearCount, prevYearCount);
+  }
+
+  return {
+    total: total, alive: alive, dead: dead, careReq: careReq,
+    survivalPct: survivalPct, monitoringCompletionPct: monitoringCompletionPct,
+    budgetUsed: budgetUsed, budgetRemaining: budgetRemaining, totalAllocated: totalAllocated, costPerTree: costPerTree,
+    bestCircle: bestCircle, worstCircle: worstCircle,
+    bestDistrict: bestDistrict, highestMortalityDistrict: highestMortalityDistrict,
+    monthlyGrowthPct: monthlyGrowthPct, annualGrowthPct: annualGrowthPct,
+  };
+}
+
+function renderExecutiveKPIs(k) {
+  var el = document.getElementById('dss-kpi-section');
+  if (!el) return;
+  var cfg = getDssConfig();
+  var bands = cfg.performanceBands;
+  var mon = cfg.monitoring;
+  var risk = cfg.risk;
+
+  function regionSub(g) { return g ? (Math.round(g.survivalPct) + '% survival · ' + g.total + ' trees') : 'No data'; }
+  function mortalitySub(g) { return g ? (Math.round(g.mortalityPct) + '% mortality · ' + g.total + ' trees') : 'No data'; }
+
+  var cards = [
+    { label: 'Total Trees', val: k.total.toLocaleString(), sub: 'All plantation records (national)', cls: '' },
+    { label: 'Alive Trees', val: k.alive.toLocaleString(), sub: Math.round(k.survivalPct) + '% of total', cls: '' },
+    { label: 'Dead Trees', val: k.dead.toLocaleString(), sub: 'Candidates for replacement', cls: k.dead > 0 ? 'red' : '' },
+    { label: 'Survival %', val: Math.round(k.survivalPct) + '%', sub: 'Alive ÷ Total', cls: dssTierHigherBetter(k.survivalPct, bands.goodMin, bands.moderateMin) },
+    { label: 'Monitoring Completion', val: Math.round(k.monitoringCompletionPct) + '%', sub: '≥1 visit recorded', cls: dssTierHigherBetter(k.monitoringCompletionPct, mon.goodThresholdPct, mon.warningThresholdPct) },
+    { label: 'Trees Requiring Care', val: k.careReq.toLocaleString(), sub: 'Status: Care Required', cls: k.careReq >= risk.careBacklogCount ? 'amber' : '' },
+    { label: 'Budget Used', val: fmtBDT(k.budgetUsed), sub: 'Sum of recorded cost', cls: '' },
+    { label: 'Cost per Tree', val: fmtBDT(k.costPerTree), sub: 'Budget Used ÷ Total Trees', cls: '' },
+    { label: 'Best Circle', val: k.bestCircle ? k.bestCircle.name : '—', sub: regionSub(k.bestCircle), cls: '' },
+    { label: 'Worst Circle', val: k.worstCircle ? k.worstCircle.name : '—', sub: regionSub(k.worstCircle), cls: 'amber' },
+    { label: 'Best District', val: k.bestDistrict ? k.bestDistrict.name : '—', sub: regionSub(k.bestDistrict), cls: '' },
+    { label: 'Highest Mortality (District)', val: k.highestMortalityDistrict ? k.highestMortalityDistrict.name : '—', sub: mortalitySub(k.highestMortalityDistrict), cls: 'red' },
+    { label: 'Monthly Growth', val: dssGrowthBadge(k.monthlyGrowthPct), sub: 'Plantings vs previous month', cls: '', raw: true },
+    { label: 'Annual Growth', val: dssGrowthBadge(k.annualGrowthPct), sub: 'Plantings vs previous year', cls: '', raw: true },
+  ];
+  // "Budget Remaining" compares this scope's spend against a single NATIONAL
+  // allocation figure, so it's only meaningful for Admin's national-scope
+  // view — Circle/District/Upazila don't get it (see also Budget Intelligence).
+  if (SESSION.role === 'admin') {
+    cards.splice(7, 0, { label: 'Budget Remaining', val: fmtBDT(k.budgetRemaining), sub: 'Of ' + fmtBDT(k.totalAllocated) + ' allocated', cls: k.budgetRemaining < 0 ? 'red' : '' });
+  }
+
+  el.className = 'kpi-grid-wide';
+  el.innerHTML = cards.map(function(c) {
+    var valHtml = c.raw ? c.val : escapeHtml(String(c.val));
+    return '<div class="kpi-card ' + c.cls + '"><div class="kpi-val" style="' + (c.raw ? '' : 'font-size:22px') + '">' + valHtml + '</div>' +
+      '<div class="kpi-label">' + c.label + '</div><div class="kpi-sub">' + c.sub + '</div></div>';
+  }).join('');
+}
+
+// ── Module 2: Environmental Performance Index ────────────────────────
+// (Renamed from "National Health Index" — this DSS is about tree
+// plantation, ecosystem restoration, and climate outcomes, not human
+// health, so the old name was misleading.)
+// A single weighted score (0-100) combining the three figures HQ leadership
+// cares most about at a glance: Survival, Monitoring Completion, and Care
+// Backlog (inverted — a small backlog is healthy). Weights and score bands
+// both come from getDssConfig() — see performanceIndexWeights and
+// performanceBands on the DSS Configuration page.
+function computeEnvironmentalPerformanceIndex(k) {
+  var cfg = getDssConfig();
+  var careReqPct = k.total > 0 ? (k.careReq / k.total * 100) : 0;
+  var backlogHealthPct = Math.max(0, 100 - careReqPct);
+  var w = cfg.performanceIndexWeights;
+  var contribSurvival = k.survivalPct * w.survival;
+  var contribMonitoring = k.monitoringCompletionPct * w.monitoring;
+  var contribBacklog = backlogHealthPct * w.backlog;
+  var score = Math.max(0, Math.min(100, contribSurvival + contribMonitoring + contribBacklog));
+
+  var bands = cfg.performanceBands;
+  var band, bandColor;
+  if (score >= bands.excellentMin) { band = 'Excellent'; bandColor = '#1a5c2a'; }
+  else if (score >= bands.goodMin) { band = 'Good'; bandColor = '#2d8a42'; }
+  else if (score >= bands.moderateMin) { band = 'Moderate'; bandColor = '#f57c00'; }
+  else { band = 'Critical'; bandColor = '#c62828'; }
+
+  return {
+    score: score, band: band, bandColor: bandColor, careReqPct: careReqPct,
+    breakdown: [
+      { label: 'Survival Rate', rawPct: k.survivalPct, weightPct: w.survival * 100, contribution: contribSurvival,
+        note: k.alive.toLocaleString() + ' alive of ' + k.total.toLocaleString() + ' total trees' },
+      { label: 'Monitoring Completion', rawPct: k.monitoringCompletionPct, weightPct: w.monitoring * 100, contribution: contribMonitoring,
+        note: 'Share of records with at least one recorded monitoring visit' },
+      { label: 'Care Backlog Health', rawPct: backlogHealthPct, weightPct: w.backlog * 100, contribution: contribBacklog,
+        note: '100% − ' + Math.round(careReqPct) + '% of trees currently flagged "Care Required"' },
+    ],
+  };
+}
+
+// Hand-rolled SVG half-donut gauge (this app has no chart library loaded —
+// only Leaflet + jsPDF — so this stays a small dependency-free helper
+// rather than pulling in a new external library for one gauge).
+function dssGaugePoint(cx, cy, r, pct) {
+  var theta = (180 - 180 * pct) * Math.PI / 180;
+  return { x: cx + r * Math.cos(theta), y: cy - r * Math.sin(theta) };
+}
+function dssGaugeArcPath(cx, cy, r, pctFrom, pctTo) {
+  var p1 = dssGaugePoint(cx, cy, r, pctFrom);
+  var p2 = dssGaugePoint(cx, cy, r, pctTo);
+  var largeArc = ((pctTo - pctFrom) * 180) > 180 ? 1 : 0;
+  return 'M ' + p1.x + ' ' + p1.y + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + p2.x + ' ' + p2.y;
+}
+function buildDssGaugeSVG(score, color) {
+  var size = 220, cx = size / 2, cy = size / 2, r = size / 2 - 18;
+  var pct = Math.max(0, Math.min(1, score / 100));
+  var bg = dssGaugeArcPath(cx, cy, r, 0, 1);
+  var val = dssGaugeArcPath(cx, cy, r, 0, pct);
+  return '<svg viewBox="0 0 ' + size + ' ' + (cy + 20) + '" width="100%" style="max-width:240px;display:block;margin:0 auto">' +
+    '<path d="' + bg + '" stroke="#e6e6e6" stroke-width="18" fill="none" stroke-linecap="round"/>' +
+    '<path d="' + val + '" stroke="' + color + '" stroke-width="18" fill="none" stroke-linecap="round"/>' +
+    '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" font-size="34" font-weight="700" fill="#222">' + Math.round(score) + '</text>' +
+    '</svg>';
+}
+function renderEnvironmentalPerformanceIndex(h) {
+  var el = document.getElementById('dss-epi-section');
+  if (!el) return;
+  var bands = getDssConfig().performanceBands;
+  var breakdownHtml = h.breakdown.map(function(b) {
+    return '<div style="padding:9px 0;border-bottom:1px solid #f0f0f0">' +
+      '<div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:#333">' +
+        '<span>' + escapeHtml(b.label) + '</span><span>' + Math.round(b.rawPct) + '% × ' + Math.round(b.weightPct) + '% weight = ' + (Math.round(b.contribution * 10) / 10) + ' pts</span>' +
+      '</div>' +
+      '<div style="font-size:11px;color:#999;margin-top:2px">' + escapeHtml(b.note) + '</div>' +
+    '</div>';
+  }).join('');
+  el.innerHTML =
+    '<div class="two-col">' +
+      '<div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center">' +
+        '<div class="card-title" style="align-self:flex-start"><span>🧭</span> Environmental Performance Index</div>' +
+        buildDssGaugeSVG(h.score, h.bandColor) +
+        '<div style="text-align:center;font-size:13px;font-weight:700;color:' + h.bandColor + ';margin-top:4px">' + h.band + '</div>' +
+        '<div style="text-align:center;font-size:11px;color:#aaa;margin-top:6px">Bands — Excellent ≥' + bands.excellentMin + ' · Good ≥' + bands.goodMin + ' · Moderate ≥' + bands.moderateMin + ' · Critical below</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<div class="card-title"><span>💡</span> Why this score was generated</div>' +
+        '<div style="font-size:12px;color:#888;margin-bottom:4px">Weighted from three national indicators (weights configurable in DSS Configuration):</div>' +
+        breakdownHtml +
+        '<div style="display:flex;justify-content:space-between;padding-top:10px;font-size:13px;font-weight:700;color:#1a5c2a">' +
+          '<span>Total Score</span><span>' + (Math.round(h.score * 10) / 10) + ' / 100 — ' + h.band + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Module 8: Interactive Filters
+// ════════════════════════════════════════════════════════════════════
+// One filter state object every DSS module reads through dssRecords().
+// Circle → District → Upazilla cascade using the same divData/districtMap/
+// upazillaMap hierarchy the rest of the app already uses (e.g. the Add Tree
+// Record form), rather than deriving the list from whatever happens to be
+// in the data — that stays correct even for an area with zero records yet.
+var DSS_FILTERS = { div: '', dis: '', upa: '', species: '', status: '', dateFrom: '', dateTo: '' };
+var _dssFilterBarInitialized = false;
+
+// Which of div/dis/upa are permanently fixed for this role (not resettable,
+// not user-changeable) and what they're fixed to. Admin gets none — full
+// national picker, same as before. Mirrors the scoping already used by
+// renderLocationFilterControls() for Records/Monitoring.
+function dssFixedScope() {
+  var role = SESSION.role;
+  if (role === 'divisional') return { div: SESSION.div };
+  if (role === 'district')   return { div: SESSION.div, dis: SESSION.dis };
+  if (role === 'upazilla')   return { div: SESSION.div, dis: SESSION.dis, upa: SESSION.upa };
+  return {};
+}
+function initDssFilterBarOnce() {
+  if (_dssFilterBarInitialized) return;
+  _dssFilterBarInitialized = true;
+  var divSel = document.getElementById('dss-f-div');
+  var disSel = document.getElementById('dss-f-dis');
+  var upaSel = document.getElementById('dss-f-upa');
+  var fixed = dssFixedScope();
+
+  if (fixed.div) {
+    if (divSel) { divSel.innerHTML = ''; divSel.appendChild(new Option(fixed.div, fixed.div)); divSel.value = fixed.div; divSel.disabled = true; }
+    DSS_FILTERS.div = fixed.div;
+  } else if (divSel) {
+    divData.forEach(function(d){ divSel.appendChild(new Option(d.name, d.name)); });
+  }
+
+  if (fixed.dis) {
+    if (disSel) { disSel.innerHTML = ''; disSel.appendChild(new Option(fixed.dis, fixed.dis)); disSel.value = fixed.dis; disSel.disabled = true; }
+    DSS_FILTERS.dis = fixed.dis;
+  } else if (fixed.div && disSel) {
+    // Circle is fixed but District isn't (divisional role) — offer only
+    // this Circle's Districts, not the whole country's.
+    disSel.innerHTML = '<option value="">All Districts</option>';
+    (districtMap[fixed.div] || []).forEach(function(d){ disSel.appendChild(new Option(d, d)); });
+  }
+
+  if (fixed.upa) {
+    if (upaSel) { upaSel.innerHTML = ''; upaSel.appendChild(new Option(fixed.upa, fixed.upa)); upaSel.value = fixed.upa; upaSel.disabled = true; }
+    DSS_FILTERS.upa = fixed.upa;
+  } else if (fixed.dis && upaSel) {
+    // District is fixed but Upazilla isn't (district role) — offer only
+    // this District's Upazillas.
+    upaSel.innerHTML = '<option value="">All Upazillas</option>';
+    (upazillaMap[fixed.dis] || []).forEach(function(u){ upaSel.appendChild(new Option(u, u)); });
+  }
+
+  // Species has no canonical master list in this app (unlike circles/
+  // districts/upazillas), so this one is genuinely derived from the data.
+  // Deriving it from `records` is scope-safe on its own — for a non-admin
+  // that array is already server-side filtered to their jurisdiction.
+  var speciesSel = document.getElementById('dss-f-species');
+  if (speciesSel) {
+    var seen = {};
+    records.forEach(function(r){ if (r.species) seen[r.species] = true; });
+    Object.keys(seen).sort().forEach(function(s){ speciesSel.appendChild(new Option(s, s)); });
+  }
+}
+function onDssFilterDivChange() {
+  var divSel = document.getElementById('dss-f-div'), disSel = document.getElementById('dss-f-dis'), upaSel = document.getElementById('dss-f-upa');
+  DSS_FILTERS.div = divSel.value; DSS_FILTERS.dis = ''; DSS_FILTERS.upa = '';
+  disSel.innerHTML = '<option value="">All Districts</option>';
+  upaSel.innerHTML = '<option value="">All Upazillas</option>';
+  if (divSel.value && districtMap[divSel.value]) districtMap[divSel.value].forEach(function(d){ disSel.appendChild(new Option(d, d)); });
+  renderDSSPage();
+}
+function onDssFilterDisChange() {
+  var disSel = document.getElementById('dss-f-dis'), upaSel = document.getElementById('dss-f-upa');
+  DSS_FILTERS.dis = disSel.value; DSS_FILTERS.upa = '';
+  upaSel.innerHTML = '<option value="">All Upazillas</option>';
+  if (disSel.value && upazillaMap[disSel.value]) upazillaMap[disSel.value].forEach(function(u){ upaSel.appendChild(new Option(u, u)); });
+  renderDSSPage();
+}
+function onDssFilterChange() {
+  DSS_FILTERS.upa = document.getElementById('dss-f-upa').value;
+  DSS_FILTERS.species = document.getElementById('dss-f-species').value;
+  DSS_FILTERS.status = document.getElementById('dss-f-status').value;
+  DSS_FILTERS.dateFrom = document.getElementById('dss-f-datefrom').value;
+  DSS_FILTERS.dateTo = document.getElementById('dss-f-dateto').value;
+  renderDSSPage();
+}
+function resetDssFilters() {
+  var fixed = dssFixedScope();
+  DSS_FILTERS = Object.assign({ div: '', dis: '', upa: '', species: '', status: '', dateFrom: '', dateTo: '' }, fixed);
+  ['dss-f-species','dss-f-status','dss-f-datefrom','dss-f-dateto'].forEach(function(id){ var e=document.getElementById(id); if (e) e.value=''; });
+  var divSel = document.getElementById('dss-f-div');
+  if (!fixed.div && divSel) divSel.value = '';
+  var disSel = document.getElementById('dss-f-dis'), upaSel = document.getElementById('dss-f-upa');
+  // Only clear selects that aren't permanently locked to this role's own scope.
+  if (!fixed.dis && disSel) disSel.innerHTML = fixed.div ? ('<option value="">All Districts</option>' + (districtMap[fixed.div]||[]).map(function(d){return '<option value="'+d+'">'+d+'</option>';}).join('')) : '<option value="">All Districts</option>';
+  if (!fixed.upa && upaSel) upaSel.innerHTML = fixed.dis ? ('<option value="">All Upazillas</option>' + (upazillaMap[fixed.dis]||[]).map(function(u){return '<option value="'+u+'">'+u+'</option>';}).join('')) : '<option value="">All Upazillas</option>';
+  renderDSSPage();
+}
+function dssRecords() {
+  return records.filter(function(r) {
+    if (DSS_FILTERS.div && r.div !== DSS_FILTERS.div) return false;
+    if (DSS_FILTERS.dis && r.dis !== DSS_FILTERS.dis) return false;
+    if (DSS_FILTERS.upa && r.upa !== DSS_FILTERS.upa) return false;
+    if (DSS_FILTERS.species && r.species !== DSS_FILTERS.species) return false;
+    if (DSS_FILTERS.status && r.status !== DSS_FILTERS.status) return false;
+    if (DSS_FILTERS.dateFrom && (!r.date || r.date < DSS_FILTERS.dateFrom)) return false;
+    if (DSS_FILTERS.dateTo && (!r.date || r.date > DSS_FILTERS.dateTo)) return false;
+    return true;
+  });
+}
+function renderDssFilterSummary() {
+  var el = document.getElementById('dss-filter-summary');
+  if (!el) return;
+  var scoped = dssRecords();
+  var parts = [];
+  if (DSS_FILTERS.div) parts.push(DSS_FILTERS.div);
+  if (DSS_FILTERS.dis) parts.push(DSS_FILTERS.dis);
+  if (DSS_FILTERS.upa) parts.push(DSS_FILTERS.upa);
+  if (DSS_FILTERS.species) parts.push(DSS_FILTERS.species);
+  if (DSS_FILTERS.status) parts.push('Status: ' + DSS_FILTERS.status);
+  if (DSS_FILTERS.dateFrom || DSS_FILTERS.dateTo) parts.push((DSS_FILTERS.dateFrom || '…') + ' → ' + (DSS_FILTERS.dateTo || '…'));
+  el.textContent = (parts.length ? parts.join(' · ') + ' — ' : 'No filters applied — national view — ') +
+    scoped.length.toLocaleString() + ' of ' + records.length.toLocaleString() + ' records shown below';
+}
+
+// Shared helper: latest date found across a record set's plantation dates
+// AND monitoring-visit dates. Growth math (Module 1) and overdue-monitoring
+// math (Module 3/9, below) both need an anchor date, but anchor to "today"
+// would make demo/static data look artificially stale — so, matching this
+// file's own buildScopedMonthlyChart() convention, everything anchors to
+// the latest real date found in the data instead.
+function dssLatestDateInRecords(recs) {
+  var latest = '';
+  recs.forEach(function(r) {
+    if (r.date && r.date > latest) latest = r.date;
+    (r.monitoring || []).forEach(function(v){ if (v.date && v.date > latest) latest = v.date; });
+  });
+  return latest || new Date().toISOString().slice(0, 10);
+}
+function dssDaysBetween(isoA, isoB) {
+  var a = new Date(isoA + 'T00:00:00'), b = new Date(isoB + 'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Modules 3 & 9: Risk Assessment + Smart Alerts
+// ════════════════════════════════════════════════════════════════════
+// Evaluated per Circle (only 10 nationally, so each one is individually
+// actionable) against the six risk categories from the master spec. Every
+// threshold comes from getDssConfig() (risk + monitoring categories) —
+// change a value on the DSS Configuration page, every circle's risk read
+// reacts together.
+function computeCircleRiskAssessment(recs) {
+  var cfg = getDssConfig();
+  var risk = cfg.risk;
+  var poorMonitoringPct = cfg.monitoring.warningThresholdPct;
+  var anchor = dssLatestDateInRecords(recs);
+  var groups = {};
+  recs.forEach(function(r) {
+    var k = r.div; if (!k) return;
+    if (!groups[k]) groups[k] = { name: k, total: 0, alive: 0, dead: 0, careReq: 0, monitored: 0, missingGps: 0, missingPhoto: 0, overdueMonitoring: 0 };
+    var g = groups[k];
+    g.total++;
+    if (r.status === 'Alive') g.alive++;
+    if (r.status === 'Dead') g.dead++;
+    if (r.status === 'Care Required') g.careReq++;
+    if (r.monitoring && r.monitoring.length) g.monitored++;
+    if (!r.lat || !r.lon) g.missingGps++;
+    if (!r.photos || !r.photos.length) g.missingPhoto++;
+    var lastVisit = (r.monitoring && r.monitoring.length) ? r.monitoring[r.monitoring.length - 1].date : null;
+    var anchorForThis = lastVisit || r.date;
+    var daysSince = anchorForThis ? dssDaysBetween(anchorForThis, anchor) : null;
+    if (daysSince === null || daysSince >= risk.overdueMonitoringDays) g.overdueMonitoring++;
+  });
+  return Object.keys(groups).map(function(k) {
+    var g = groups[k];
+    g.mortalityPct = g.total ? (g.dead / g.total * 100) : 0;
+    g.monitoringPct = g.total ? (g.monitored / g.total * 100) : 0;
+    var risks = [];
+    if (g.mortalityPct >= risk.highMortalityPct) risks.push({ type: 'High Mortality', detail: Math.round(g.mortalityPct) + '% of trees dead (threshold ' + risk.highMortalityPct + '%)', action: 'Schedule dead-tree replacement and investigate cause of loss.' });
+    if (g.monitoringPct < poorMonitoringPct) risks.push({ type: 'Poor Monitoring', detail: Math.round(g.monitoringPct) + '% monitored (threshold ' + poorMonitoringPct + '%)', action: 'Increase monitoring visit frequency; assign additional field staff.' });
+    if (g.careReq >= risk.careBacklogCount) risks.push({ type: 'Care Backlog', detail: g.careReq + ' trees need care (threshold ' + risk.careBacklogCount + ')', action: 'Dispatch maintenance teams to clear the care backlog.' });
+    if (g.missingGps > 0) risks.push({ type: 'Missing GPS', detail: g.missingGps + ' of ' + g.total + ' records have no coordinates', action: 'Backfill GPS coordinates during the next field visit.' });
+    if (g.missingPhoto > 0) risks.push({ type: 'Missing Photograph', detail: g.missingPhoto + ' of ' + g.total + ' records have no photo', action: 'Capture missing plantation photographs during the next visit.' });
+    if (g.overdueMonitoring > 0) risks.push({ type: 'Overdue Monitoring', detail: g.overdueMonitoring + ' trees not checked within ' + risk.overdueMonitoringDays + ' days', action: 'Prioritize overdue monitoring visits immediately.' });
+    var score = risks.length;
+    var priority = score >= 4 ? 'High' : (score >= 2 ? 'Medium' : (score >= 1 ? 'Low' : 'None'));
+    return { name: k, total: g.total, mortalityPct: g.mortalityPct, monitoringPct: g.monitoringPct,
+      careReq: g.careReq, missingGps: g.missingGps, missingPhoto: g.missingPhoto, overdueMonitoring: g.overdueMonitoring,
+      risks: risks, riskScore: score, priority: priority };
+  }).sort(function(a, b){ return b.riskScore - a.riskScore; });
+}
+function computeSmartAlerts(recs, kpis, circleRisks) {
+  var cfg = getDssConfig();
+  var risk = cfg.risk;
+  var budgetCfg = cfg.budget;
+  var alerts = [];
+  var totalOverdue = circleRisks.reduce(function(s, g){ return s + g.overdueMonitoring; }, 0);
+  if (totalOverdue > 0) {
+    var pct = kpis.total ? (totalOverdue / kpis.total * 100) : 0;
+    alerts.push({ severity: pct >= risk.overdueMonitoringCriticalPct ? 'Critical' : (pct >= risk.overdueMonitoringHighPct ? 'High' : 'Medium'), title: 'Overdue Monitoring',
+      detail: totalOverdue.toLocaleString() + ' trees (' + Math.round(pct) + '%) not checked within ' + risk.overdueMonitoringDays + ' days.' });
+  }
+  var highMortalityCircles = circleRisks.filter(function(g){ return g.mortalityPct >= risk.highMortalityPct; });
+  if (highMortalityCircles.length) {
+    var worst = highMortalityCircles.slice().sort(function(a, b){ return b.mortalityPct - a.mortalityPct; })[0];
+    alerts.push({ severity: 'High', title: 'High Mortality',
+      detail: highMortalityCircles.length + ' circle(s) above ' + risk.highMortalityPct + '% mortality — worst: ' + worst.name + ' (' + Math.round(worst.mortalityPct) + '%).' });
+  }
+  var missingGpsTotal = circleRisks.reduce(function(s, g){ return s + g.missingGps; }, 0);
+  var missingPhotoTotal = circleRisks.reduce(function(s, g){ return s + g.missingPhoto; }, 0);
+  if (missingGpsTotal > 0 || missingPhotoTotal > 0) {
+    alerts.push({ severity: 'Medium', title: 'Missing Data', detail: missingGpsTotal.toLocaleString() + ' records missing GPS, ' + missingPhotoTotal.toLocaleString() + ' missing photographs.' });
+  }
+  var remainingPct = kpis.totalAllocated > 0 ? (kpis.budgetRemaining / kpis.totalAllocated * 100) : 0;
+  var utilizationPct = kpis.totalAllocated > 0 ? (kpis.budgetUsed / kpis.totalAllocated * 100) : 0;
+  if (kpis.budgetRemaining < 0) {
+    alerts.push({ severity: 'Critical', title: 'Budget Anomaly', detail: 'Spending has exceeded the allocated budget by ' + fmtBDT(Math.abs(kpis.budgetRemaining)) + '.' });
+  } else if (remainingPct < budgetCfg.budgetWarningRemainingPct) {
+    alerts.push({ severity: 'High', title: 'Budget Anomaly', detail: 'Only ' + Math.round(remainingPct) + '% of allocated budget remains.' });
+  } else if (utilizationPct >= budgetCfg.budgetUtilizationWarningPct) {
+    alerts.push({ severity: 'Medium', title: 'Budget Anomaly', detail: 'Budget utilization has reached ' + Math.round(utilizationPct) + '% — approaching full allocation.' });
+  }
+  if (kpis.careReq >= risk.careBacklogCount) {
+    alerts.push({ severity: kpis.careReq >= risk.careBacklogCount * risk.careBacklogHighMultiplier ? 'High' : 'Medium', title: 'Care Backlog',
+      detail: kpis.careReq.toLocaleString() + ' trees currently flagged Care Required (threshold ' + risk.careBacklogCount + ').' });
+  }
+  var sevOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+  return alerts.sort(function(a, b){ return sevOrder[a.severity] - sevOrder[b.severity]; });
+}
+var DSS_ALERT_COLORS = { Critical: '#c62828', High: '#e65100', Medium: '#f57c00', Low: '#1976d2' };
+function renderSmartAlerts(alerts) {
+  var el = document.getElementById('dss-alerts-section');
+  if (!el) return;
+  if (!alerts.length) {
+    el.innerHTML = '<div class="card" style="margin-bottom:14px;border-left:4px solid #2d8a42"><div class="card-title" style="margin-bottom:0"><span>✅</span> Smart Alerts — no active alerts for the current filter selection.</div></div>';
+    return;
+  }
+  var items = alerts.map(function(a) {
+    var c = DSS_ALERT_COLORS[a.severity] || '#888';
+    return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0f0f0">' +
+      '<span style="background:' + c + ';color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:2px 9px;white-space:nowrap">' + a.severity.toUpperCase() + '</span>' +
+      '<div><div style="font-size:12.5px;font-weight:700;color:#333">' + escapeHtml(a.title) + '</div><div style="font-size:12px;color:#777;margin-top:1px">' + escapeHtml(a.detail) + '</div></div>' +
+    '</div>';
+  }).join('');
+  el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="card-title"><span>🚨</span> Smart Alerts <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">' + alerts.length + ' active</span></div>' + items + '</div>';
+}
+function renderCircleRiskAssessment(circleRisks) {
+  var el = document.getElementById('dss-risk-section');
+  if (!el) return;
+  var priorityColor = { High: '#c62828', Medium: '#f57c00', Low: '#1976d2', None: '#2d8a42' };
+  var cards = circleRisks.map(function(g) {
+    var risksHtml = g.risks.length
+      ? g.risks.map(function(r){ return '<div style="font-size:11.5px;color:#555;padding:3px 0"><b style="color:#c62828">⚠ ' + escapeHtml(r.type) + ':</b> ' + escapeHtml(r.detail) + '<br><span style="color:#888">→ ' + escapeHtml(r.action) + '</span></div>'; }).join('')
+      : '<div style="font-size:11.5px;color:#2d8a42">✓ No risk indicators triggered.</div>';
+    return '<div class="kpi-card" style="border-left-color:' + priorityColor[g.priority] + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<span style="font-weight:700;font-size:13px;color:#333">' + escapeHtml(g.name) + '</span>' +
+        '<span style="background:' + priorityColor[g.priority] + ';color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:2px 9px">' + g.priority.toUpperCase() + ' RISK</span>' +
+      '</div>' +
+      '<div style="font-size:11px;color:#aaa;margin:2px 0 6px">' + g.total.toLocaleString() + ' trees · ' + Math.round(g.mortalityPct) + '% mortality · ' + Math.round(g.monitoringPct) + '% monitored</div>' +
+      risksHtml +
+    '</div>';
+  }).join('');
+  el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="card-title"><span>🛡️</span> Risk Assessment by Circle <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">6 risk categories checked per circle</span></div>' +
+    '<div class="kpi-grid-wide">' + (cards || '<div style="font-size:12px;color:#aaa">No data for the current filter selection.</div>') + '</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Module 4: Performance Ranking
+// ════════════════════════════════════════════════════════════════════
+// Overall Score reuses the same weighting idea as the Environmental
+// Performance Index (Module 2) — Survival/Monitoring/Cost-efficiency
+// instead of Survival/Monitoring/Backlog — so "why is X ranked here" stays
+// explainable the same way. Circle level (only 10 nationally) always shows
+// the full list; District and Upazilla levels split into Top 10 / Bottom
+// 10, and drop any group under getDssConfig().ranking.minSampleSize so a
+// tiny sample can't rank as "best" or "worst".
+function computeRegionRankings(recs, keyFn) {
+  var groups = {};
+  recs.forEach(function(r) {
+    var k = keyFn(r); if (!k) return;
+    if (!groups[k]) groups[k] = { name: k, total: 0, alive: 0, dead: 0, monitored: 0, cost: 0 };
+    var g = groups[k];
+    g.total++;
+    if (r.status === 'Alive') g.alive++;
+    if (r.status === 'Dead') g.dead++;
+    if (r.monitoring && r.monitoring.length) g.monitored++;
+    g.cost += (parseFloat(r.cost) || 0);
+  });
+  var list = Object.keys(groups).map(function(k){ return groups[k]; });
+  var maxCostPerTree = Math.max(1, Math.max.apply(null, list.map(function(g){ return g.total ? (g.cost / g.total) : 0; }).concat([0])));
+  var w = getDssConfig().ranking.weights;
+  list.forEach(function(g) {
+    g.survivalPct = g.total ? (g.alive / g.total * 100) : 0;
+    g.monitoringPct = g.total ? (g.monitored / g.total * 100) : 0;
+    g.costPerTree = g.total ? (g.cost / g.total) : 0;
+    var costEfficiencyPct = 100 * (1 - (g.costPerTree / maxCostPerTree)); // cheaper per tree = higher efficiency
+    g.overallScore = Math.max(0, Math.min(100, g.survivalPct * w.survival + g.monitoringPct * w.monitoring + costEfficiencyPct * w.costEfficiency));
+  });
+  return list.sort(function(a, b){ return b.overallScore - a.overallScore; });
+}
+function dssRankRow(g, rank) {
+  var rankCls = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-n';
+  return '<tr><td><span class="rank-badge ' + rankCls + '">' + rank + '</span></td><td>' + escapeHtml(g.name) + '</td>' +
+    '<td>' + g.total.toLocaleString() + '</td><td>' + Math.round(g.survivalPct) + '%</td><td>' + Math.round(g.monitoringPct) + '%</td>' +
+    '<td>' + fmtBDT(g.costPerTree) + '</td><td><b>' + (Math.round(g.overallScore * 10) / 10) + '</b></td></tr>';
+}
+function dssRankTableHead() {
+  return '<thead><tr><th>#</th><th>Name</th><th>Trees</th><th>Survival %</th><th>Monitoring %</th><th>Cost/Tree</th><th>Overall Score</th></tr></thead>';
+}
+// Takes the {circles, districts, upazillas} object computed once in
+// renderDSSPage() — Phase 6's Executive Recommendations needs the same
+// district ranking, so it's computed once and shared rather than twice.
+function renderPerformanceRanking(rankings) {
+  var el = document.getElementById('dss-ranking-section');
+  if (!el) return;
+  var minN = getDssConfig().ranking.minSampleSize;
+
+  var circles = rankings.circles;
+  var districts = rankings.districts.filter(function(g){ return g.total >= minN; });
+  var upazillas = rankings.upazillas.filter(function(g){ return g.total >= minN; });
+
+  function fullTable(list) {
+    return '<table class="compare-table">' + dssRankTableHead() + '<tbody>' + list.map(function(g, i){ return dssRankRow(g, i + 1); }).join('') + '</tbody></table>';
+  }
+  function topBottomTables(list, label) {
+    if (!list.length) return '<div style="font-size:12px;color:#aaa;padding:6px 0">No ' + label + ' meets the minimum sample size (' + minN + ' trees) for the current filter selection.</div>';
+    var top10 = list.slice(0, 10);
+    var bottom10 = list.slice(-10).reverse();
+    return '<div class="two-col">' +
+      '<div><div style="font-size:12px;font-weight:700;color:#1a5c2a;margin-bottom:6px">🏆 Top 10 ' + label + '</div>' + fullTable(top10) + '</div>' +
+      '<div><div style="font-size:12px;font-weight:700;color:#c62828;margin-bottom:6px">⚠ Bottom 10 ' + label + '</div>' + fullTable(bottom10) + '</div>' +
+    '</div>';
+  }
+
+  el.innerHTML =
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-title"><span>🏅</span> Performance Ranking — Circles <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">All ' + circles.length + ' circles (only 10 nationally — shown in full, not split Top/Bottom)</span></div>' +
+      fullTable(circles) +
+    '</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-title"><span>🏅</span> Performance Ranking — Districts</div>' +
+      topBottomTables(districts, 'Districts') +
+    '</div>' +
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-title"><span>🏅</span> Performance Ranking — Upazillas</div>' +
+      topBottomTables(upazillas, 'Upazillas') +
+    '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Module 5: Executive Recommendations
+// ════════════════════════════════════════════════════════════════════
+// Deliberately generates NOTHING new — every recommendation is a plain-
+// language restatement of something Module 3 (Risk Assessment), Module 4
+// (Performance Ranking), or Module 9 (Smart Alerts) already found, so there
+// is exactly one place (those modules) where the underlying judgment calls
+// live, and this stays a thin presentation/prioritization layer over them.
+var DSS_RISK_RECOMMENDATION_TEMPLATES = {
+  'High Mortality':       { title: 'Replace dead trees in REGION',                     impact: 'Restores canopy coverage and prevents further budget loss on failed plantings.', priority: 'High' },
+  'Poor Monitoring':      { title: 'Increase monitoring visits in REGION',              impact: 'Improves early detection of stress or disease, raising future survival rate.',   priority: 'Medium' },
+  'Care Backlog':         { title: 'Dispatch maintenance teams to REGION',              impact: 'Prevents backlog trees from deteriorating into Dead status.',                    priority: 'Medium' },
+  'Missing GPS':          { title: 'Complete GPS documentation in REGION',              impact: 'Improves GIS mapping accuracy and audit readiness.',                             priority: 'Low' },
+  'Missing Photograph':   { title: 'Complete photographic documentation in REGION',     impact: 'Improves audit readiness and visual verification of plantings.',                 priority: 'Low' },
+  'Overdue Monitoring':   { title: 'Conduct emergency inspection in REGION',            impact: 'Brings overdue sites back within the monitoring schedule.',                      priority: 'High' },
+};
+function computeExecutiveRecommendations(circleRisks, districtRankings, alerts, kpis) {
+  var cfg = getDssConfig();
+  var recs = [];
+  var priorityRank = { High: 0, Medium: 1, Low: 2 };
+
+  circleRisks.forEach(function(g) {
+    g.risks.forEach(function(r) {
+      var tmpl = DSS_RISK_RECOMMENDATION_TEMPLATES[r.type];
+      if (!tmpl) return;
+      recs.push({ title: tmpl.title.replace('REGION', g.name), reason: r.detail, priority: tmpl.priority, expectedImpact: tmpl.impact });
+    });
+  });
+
+  // Bottom-N districts by Overall Score (N = Investment Priority Count,
+  // meeting the ranking minimum sample size) get a targeted line too — more
+  // locally actionable than a circle-wide recommendation, and not otherwise
+  // covered by the risk pass above.
+  var minN = cfg.ranking.minSampleSize;
+  var priorityCount = cfg.budget.investmentPriorityCount;
+  districtRankings.filter(function(g){ return g.total >= minN; }).slice(-priorityCount).reverse().forEach(function(g) {
+    recs.push({
+      title: 'Conduct a targeted performance review in ' + g.name + ' district',
+      reason: 'Lowest Overall Score nationally among districts meeting the minimum sample size (' + (Math.round(g.overallScore * 10) / 10) + '/100).',
+      priority: 'Medium',
+      expectedImpact: 'Identifies district-specific causes behind underperformance before they affect the wider circle.',
+    });
+  });
+
+  alerts.filter(function(a){ return a.title === 'Budget Anomaly'; }).forEach(function(a) {
+    recs.push({
+      title: a.severity === 'Critical' ? 'Reprioritize spending — allocated budget exceeded' : 'Request additional budget allocation',
+      reason: a.detail, priority: a.severity === 'Critical' ? 'High' : 'Medium',
+      expectedImpact: 'Avoids halting active plantation and maintenance activity for the rest of the period.',
+    });
+  });
+
+  if (kpis.careReq >= cfg.risk.careBacklogCount) {
+    recs.push({
+      title: 'Increase maintenance budget for care backlog',
+      reason: kpis.careReq.toLocaleString() + ' trees nationally flagged Care Required.',
+      priority: 'Medium',
+      expectedImpact: 'Reduces the number of Care Required trees progressing to Dead status.',
+    });
+  }
+
+  recs.sort(function(a, b){ return priorityRank[a.priority] - priorityRank[b.priority]; });
+  return recs.slice(0, 12); // keep the executive view focused, not exhaustive
+}
+function renderExecutiveRecommendations(recs) {
+  var el = document.getElementById('dss-recommendations-section');
+  if (!el) return;
+  var priorityColor = { High: '#c62828', Medium: '#f57c00', Low: '#1976d2' };
+  if (!recs.length) {
+    el.innerHTML = '<div class="card" style="margin-bottom:14px;border-left:4px solid #2d8a42"><div class="card-title" style="margin-bottom:0"><span>✅</span> Executive Recommendations — nothing flagged for the current filter selection.</div></div>';
+    return;
+  }
+  var items = recs.map(function(r, i) {
+    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+        '<span style="font-size:13px;font-weight:700;color:#333">' + (i + 1) + '. ' + escapeHtml(r.title) + '</span>' +
+        '<span style="background:' + priorityColor[r.priority] + ';color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:2px 9px;white-space:nowrap">' + r.priority.toUpperCase() + '</span>' +
+      '</div>' +
+      '<div style="font-size:12px;color:#888;margin-top:3px"><b>Reason:</b> ' + escapeHtml(r.reason) + '</div>' +
+      '<div style="font-size:12px;color:#2d8a42;margin-top:1px"><b>Expected Impact:</b> ' + escapeHtml(r.expectedImpact) + '</div>' +
+    '</div>';
+  }).join('');
+  el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="card-title"><span>📋</span> Executive Recommendations <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">Auto-generated from current Risk &amp; Ranking data</span></div>' + items + '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Module 10: Climate Intelligence (computed first — Module 6 below uses its
+// annual CO2 figure for the ROI estimate)
+// ════════════════════════════════════════════════════════════════════
+// Only living (Alive-status) trees count toward every sequestration figure,
+// past or future, per the master spec. There is no date-of-death field, so
+// "Carbon Lost — Dead Trees" is framed as the full assumed-lifetime
+// potential foregone rather than a reconstructed partial-life estimate —
+// simpler, defensible, and arguably the more useful "opportunity cost" view
+// for a planning audience anyway. Every constant comes from
+// getDssConfig().carbonClimate — nothing here is a hardcoded assumption.
+function computeClimateIntelligence(recs) {
+  var cfg = getDssConfig().carbonClimate;
+  var anchor = dssLatestDateInRecords(recs);
+  var alive = recs.filter(function(r){ return r.status === 'Alive'; });
+  var dead = recs.filter(function(r){ return r.status === 'Dead'; });
+
+  function ageYearsOf(r) {
+    if (!r.date) return 0;
+    return Math.max(0, Math.min(cfg.assumedLifetimeYears, dssDaysBetween(r.date, anchor) / 365.25));
+  }
+  var cumulativeCO2Kg = 0;
+  alive.forEach(function(r){ cumulativeCO2Kg += ageYearsOf(r) * cfg.co2SequesteredPerTreePerYearKg; });
+  var cumulativeCarbonKg = cumulativeCO2Kg * cfg.carbonFractionOfCO2;
+
+  var annualCO2Kg = alive.length * cfg.co2SequesteredPerTreePerYearKg;
+  var annualCarbonKg = annualCO2Kg * cfg.carbonFractionOfCO2;
+  var lifetimeCarbonKg = annualCarbonKg * cfg.assumedLifetimeYears;
+  var annualO2Kg = alive.length * cfg.o2ProducedPerTreePerYearKg;
+  var annualPM25Kg = alive.length * cfg.pm25FilteredPerTreePerYearKg;
+  var carbonLostDeadKg = dead.length * cfg.co2SequesteredPerTreePerYearKg * cfg.carbonFractionOfCO2 * cfg.assumedLifetimeYears;
+  // "Greenhouse Gas Reduction" is the one figure the carbonReductionMultiplier
+  // adjusts — a deliberate, separately-labeled knob for reporting purposes,
+  // distinct from the raw physical Annual CO2 Sequestration figure above.
+  var greenhouseGasReductionKg = annualCO2Kg * cfg.carbonReductionMultiplier;
+
+  function projectedCO2(yearsAhead) {
+    var total = cumulativeCO2Kg;
+    alive.forEach(function(r) {
+      var remainingLifetime = cfg.assumedLifetimeYears - ageYearsOf(r);
+      total += Math.max(0, Math.min(yearsAhead, remainingLifetime)) * cfg.co2SequesteredPerTreePerYearKg;
+    });
+    return total;
+  }
+  // Dynamic — however many horizons are configured in carbonClimate.forecastYears.
+  var projections = (cfg.forecastYears || []).map(function(y){ return { years: y, co2Kg: projectedCO2(y) }; });
+
+  return {
+    aliveCount: alive.length, deadCount: dead.length,
+    cumulativeCO2Kg: cumulativeCO2Kg, cumulativeCarbonKg: cumulativeCarbonKg,
+    annualCO2Kg: annualCO2Kg, annualCarbonKg: annualCarbonKg, lifetimeCarbonKg: lifetimeCarbonKg,
+    annualO2Kg: annualO2Kg, annualPM25Kg: annualPM25Kg, carbonLostDeadKg: carbonLostDeadKg,
+    greenhouseGasReductionKg: greenhouseGasReductionKg, projections: projections,
+  };
+}
+function fmtKg(kg) {
+  var t = kg / 1000;
+  return Math.round(kg).toLocaleString() + ' kg' + (t >= 1 ? ' (' + (Math.round(t * 100) / 100).toLocaleString() + ' t)' : '');
+}
+function renderClimateIntelligence(c) {
+  var el = document.getElementById('dss-climate-section');
+  if (!el) return;
+  var cfg = getDssConfig().carbonClimate;
+  var confidencePct = getDssConfig().climateIntelligence.forecastConfidencePct;
+  var cards = [
+    { label: 'Estimated Carbon Stored (to date)', val: fmtKg(c.cumulativeCarbonKg), sub: 'Elemental carbon in living tree biomass' },
+    { label: 'Annual Carbon Sequestration', val: fmtKg(c.annualCarbonKg) + '/yr', sub: 'Current rate, all living trees' },
+    { label: 'Lifetime Carbon Storage (projected)', val: fmtKg(c.lifetimeCarbonKg), sub: 'If living trees reach ' + cfg.assumedLifetimeYears + ' years' },
+    { label: 'CO₂ Removed (to date)', val: fmtKg(c.cumulativeCO2Kg), sub: 'Cumulative, living trees only' },
+  ];
+  c.projections.forEach(function(p) {
+    cards.push({ label: 'Projected CO₂ Removal (' + p.years + ' yr)', val: fmtKg(p.co2Kg), sub: 'From today, living trees only · ~' + confidencePct + '% confidence' });
+  });
+  cards.push(
+    { label: 'Greenhouse Gas Reduction', val: fmtKg(c.greenhouseGasReductionKg) + '/yr', sub: 'Annual CO₂ × reduction multiplier (' + cfg.carbonReductionMultiplier + '×)' },
+    { label: 'Oxygen Production', val: fmtKg(c.annualO2Kg) + '/yr', sub: 'Rule-of-thumb estimate, all living trees' },
+    { label: 'PM2.5 Reduction', val: fmtKg(c.annualPM25Kg) + '/yr', sub: 'Particulate matter filtered annually' },
+    { label: 'Air Quality Improvement', val: fmtKg(c.annualPM25Kg) + '/yr', sub: 'Same underlying figure as PM2.5 Reduction' },
+    { label: 'Carbon Lost — Dead Trees', val: fmtKg(c.carbonLostDeadKg), sub: 'Full lifetime potential foregone (' + c.deadCount.toLocaleString() + ' trees)', cls: 'red' }
+  );
+  el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="card-title"><span>🌍</span> Climate Intelligence <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">Configurable in DSS Configuration → Carbon &amp; Climate</span></div>' +
+    '<div class="kpi-grid-wide">' + cards.map(function(c2){ return '<div class="kpi-card ' + (c2.cls || '') + '"><div class="kpi-val" style="font-size:17px">' + c2.val + '</div><div class="kpi-label">' + c2.label + '</div><div class="kpi-sub">' + c2.sub + '</div></div>'; }).join('') + '</div>' +
+    '<p style="font-size:11px;color:#aaa;padding:10px 4px 0;line-height:1.6">ℹ️ Standard rule-of-thumb estimates (all constants adjustable on the DSS Configuration page), not a species-specific or third-party-verified carbon audit. "Air Quality Improvement" restates PM2.5 Reduction in more general-audience terms — it is not a separate underlying calculation. Only living trees are counted toward sequestration; "Carbon Lost" represents dead trees\' full assumed-lifetime potential foregone, since no date-of-death field exists to reconstruct their partial actual lifespan.</p>' +
+  '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Module 6: Budget Intelligence
+// ════════════════════════════════════════════════════════════════════
+// ROI here is deliberately narrow and clearly labeled as such: it values
+// only the climate benefit (via Module 10's annual CO2 figure and the
+// social-cost-of-carbon assumption) against budget spent — not shade,
+// biodiversity, soil, or social value. Treat it as a conservative lower
+// bound, not a full economic appraisal.
+// "Budget Remaining"/"ROI" are HQ-Admin-only cards (see renderBudgetIntelligence):
+// totalAllocatedBDT is a single NATIONAL figure, so it's only a meaningful
+// comparison against Admin's national-scope budgetUsed. For a Circle/
+// District/Upazila view, kpis.budgetUsed is scoped to their own jurisdiction
+// but totalAllocated is still the whole country's figure — comparing the two
+// there would be misleading, so those roles simply don't get these two cards.
+function computeBudgetIntelligence(recs, kpis, climate) {
+  var cfg = getDssConfig();
+  var deadRecs = recs.filter(function(r){ return r.status === 'Dead'; });
+  var costPerAliveTree = kpis.alive > 0 ? (kpis.budgetUsed / kpis.alive) : 0;
+  var costPerDeadTree = deadRecs.length > 0 ? (costSum(deadRecs) / deadRecs.length) : 0;
+  var annualEnvironmentalValueBDT = climate.annualCO2Kg * cfg.carbonClimate.socialCostOfCarbonBDTPerKg;
+  var roiPct = kpis.budgetUsed > 0 ? (annualEnvironmentalValueBDT / kpis.budgetUsed * 100) : 0;
+  var roiTier = roiPct >= cfg.budget.excellentRoiPct ? 'Excellent' : (roiPct >= cfg.budget.acceptableRoiPct ? 'Acceptable' : 'Low');
+  return {
+    budgetUsed: kpis.budgetUsed, budgetRemaining: kpis.budgetRemaining, totalAllocated: kpis.totalAllocated,
+    costPerAliveTree: costPerAliveTree, costPerDeadTree: costPerDeadTree,
+    budgetEfficiencyPct: kpis.survivalPct, annualEnvironmentalValueBDT: annualEnvironmentalValueBDT, roiPct: roiPct, roiTier: roiTier,
+  };
+}
+function renderBudgetIntelligence(b) {
+  var el = document.getElementById('dss-budget-intel-section');
+  if (!el) return;
+  var cfg = getDssConfig();
+  var isAdmin = (SESSION.role === 'admin');
+  var roiTierCls = { Excellent: '', Acceptable: 'amber', Low: 'red' }[b.roiTier];
+  var cards = [
+    { label: 'Budget Spent', val: fmtBDT(b.budgetUsed), sub: 'Sum of recorded cost', cls: '' },
+  ];
+  // Budget Remaining / ROI compare this scope's spend against a single
+  // NATIONAL allocation figure, so they're only meaningful for Admin's
+  // national-scope view — Circle/District/Upazila don't get these two cards.
+  if (isAdmin) {
+    cards.push({ label: 'Budget Remaining', val: fmtBDT(b.budgetRemaining), sub: 'Of ' + fmtBDT(b.totalAllocated) + ' allocated', cls: b.budgetRemaining < 0 ? 'red' : '' });
+  }
+  cards.push(
+    { label: 'Cost per Alive Tree', val: fmtBDT(b.costPerAliveTree), sub: 'Total spend ÷ trees currently alive', cls: '' },
+    { label: 'Cost per Dead Tree', val: fmtBDT(b.costPerDeadTree), sub: 'Avg. recorded cost on Dead-status plantings', cls: 'amber' },
+    { label: 'Budget Efficiency', val: Math.round(b.budgetEfficiencyPct) + '%', sub: 'Share of spend currently sustaining a living tree', cls: '' }
+  );
+  if (isAdmin) {
+    cards.push({ label: 'Estimated Annual ROI', val: (Math.round(b.roiPct * 10) / 10) + '% — ' + b.roiTier, sub: 'Est. climate value ÷ budget spent, per year', cls: roiTierCls });
+  }
+  el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="card-title"><span>📈</span> Budget Intelligence</div>' +
+    '<div class="kpi-grid-wide">' + cards.map(function(c){ return '<div class="kpi-card ' + c.cls + '"><div class="kpi-val" style="font-size:19px">' + c.val + '</div><div class="kpi-label">' + c.label + '</div><div class="kpi-sub">' + c.sub + '</div></div>'; }).join('') + '</div>' +
+    (isAdmin ? '<p style="font-size:11px;color:#aaa;padding:10px 4px 0;line-height:1.6">ℹ️ "Estimated Annual ROI" values this year\'s CO₂ sequestration from living trees at an assumed social cost of carbon (currently BDT ' + cfg.carbonClimate.socialCostOfCarbonBDTPerKg + '/kg) and compares that to total budget spent. ROI tier cutoffs (Excellent ≥' + cfg.budget.excellentRoiPct + '%, Acceptable ≥' + cfg.budget.acceptableRoiPct + '%) and the carbon price itself are both adjustable on the DSS Configuration page. It captures only the climate benefit — not shade, biodiversity, soil, or social value — so treat it as a conservative lower-bound estimate, not a complete economic appraisal.</p>' : '') +
+  '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Module 7: Predictive Analytics
+// ════════════════════════════════════════════════════════════════════
+// A simple, transparent decay model — NOT a trained ML model — projecting
+// today's alive population forward using one configurable assumed annual
+// attrition rate (getDssConfig().survivalAttrition.assumedAnnualMortalityRatePct
+// — edited on the DSS Configuration page, same as Budget Allocation).
+function projectSurvival(aliveCount, totalCount, years, annualMortalityRatePct) {
+  var retention = 1 - (annualMortalityRatePct / 100);
+  var projectedAlive = aliveCount * Math.pow(retention, years);
+  return { years: years, projectedAlive: projectedAlive, projectedSurvivalPct: totalCount > 0 ? (projectedAlive / totalCount * 100) : 0 };
+}
+function computePredictiveAnalytics(kpis) {
+  var cfg = getDssConfig();
+  var rate = cfg.survivalAttrition.assumedAnnualMortalityRatePct;
+  var p1 = projectSurvival(kpis.alive, kpis.total, 1, rate);
+  var p5 = projectSurvival(kpis.alive, kpis.total, 5, rate);
+  var p10 = projectSurvival(kpis.alive, kpis.total, 10, rate);
+  var maintenanceDemandNextYearBDT = p1.projectedAlive * cfg.budget.avgAnnualMaintenanceCostPerTreeBDT;
+  var projectedDeathsNextYear = Math.max(0, kpis.alive - p1.projectedAlive);
+  var avgCostPerTree = kpis.total > 0 ? (kpis.budgetUsed / kpis.total) : 0;
+  var replacementCostNextYearBDT = projectedDeathsNextYear * avgCostPerTree;
+  return {
+    rate: rate, survival5y: p5, survival10y: p10,
+    maintenanceDemandNextYearBDT: maintenanceDemandNextYearBDT,
+    projectedDeathsNextYear: projectedDeathsNextYear,
+    replacementCostNextYearBDT: replacementCostNextYearBDT,
+    budgetRequirementNextYearBDT: maintenanceDemandNextYearBDT + replacementCostNextYearBDT,
+  };
+}
+function renderPredictiveAnalytics(p) {
+  var el = document.getElementById('dss-predictive-section');
+  if (!el) return;
+  var cards = [
+    { label: 'Survival after 5 years', val: Math.round(p.survival5y.projectedSurvivalPct) + '%', sub: (Math.round(p.survival5y.projectedAlive)).toLocaleString() + ' trees projected alive' },
+    { label: 'Survival after 10 years', val: Math.round(p.survival10y.projectedSurvivalPct) + '%', sub: (Math.round(p.survival10y.projectedAlive)).toLocaleString() + ' trees projected alive' },
+    { label: 'Projected Deaths (next yr)', val: Math.round(p.projectedDeathsNextYear).toLocaleString(), sub: 'At ' + p.rate + '%/year attrition', cls: 'amber' },
+    { label: 'Maintenance Demand (next yr)', val: fmtBDT(p.maintenanceDemandNextYearBDT), sub: 'Projected alive trees × per-tree maintenance cost' },
+    { label: 'Replacement Cost (next yr)', val: fmtBDT(p.replacementCostNextYearBDT), sub: 'Projected deaths × avg. cost per tree' },
+    { label: 'Budget Requirement (next yr)', val: fmtBDT(p.budgetRequirementNextYearBDT), sub: 'Maintenance + replacement cost combined', cls: '' },
+  ];
+  el.innerHTML = '<div class="card" style="margin-bottom:14px"><div class="card-title"><span>🔮</span> Predictive Analytics <button class="btn btn-sm no-print" style="margin-left:auto" onclick="showPage(\'dss-config\', document.getElementById(\'sidebar-dss-config\'))">⚙️ Edit assumption →</button></div>' +
+    '<p style="padding:0 4px 10px;font-size:12px;color:#888;line-height:1.6">A transparent projection, not a trained model — assumes living trees are lost at a steady rate every year absent new intervention, currently <b>' + p.rate + '%/year</b> (edit on the DSS Configuration page).</p>' +
+    '<div class="kpi-grid-wide">' + cards.map(function(c){ return '<div class="kpi-card ' + (c.cls || '') + '"><div class="kpi-val" style="font-size:19px">' + c.val + '</div><div class="kpi-label">' + c.label + '</div><div class="kpi-sub">' + c.sub + '</div></div>'; }).join('') + '</div>' +
+  '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Scenario Simulator
+// ════════════════════════════════════════════════════════════════════
+// Entirely hypothetical and read-only — recomputes a lightweight parallel
+// set of headline numbers from arithmetic on the REAL kpis/budget/climate
+// baseline. It never touches, clones, or fakes individual records (that
+// would risk misrepresenting Risk/Ranking, which are genuinely per-record
+// calculations), and never writes anything back to real data — it's purely
+// a "what if" side-by-side comparison against the current Executive KPIs.
+//
+// Supports BOTH preset buttons (quick, common scenarios) AND direct manual
+// entry (exact real-world figures) — manual values, where filled in, always
+// take precedence over the matching preset. `null` on any manual* field
+// means "not set, use the preset/actual value instead."
+var DSS_SCENARIO = {
+  survivalTargetPct: null, maintenanceIncreasePct: 0, monitoringIncreasePct: 0,
+  manualBudgetBDT: null, manualPlantationTarget: null, manualSurvivalPct: null,
+  manualAttritionRatePct: null, manualCarbonPriceBDTPerKg: null, manualCo2PerTreePerYearKg: null,
+  manualMonitoringPct: null, manualForecastYears: null, manualRiskMultiplier: null,
+};
+function setDssScenarioSurvival(pct) {
+  DSS_SCENARIO.survivalTargetPct = (DSS_SCENARIO.survivalTargetPct === pct) ? null : pct;
+  renderDSSPage();
+}
+function setDssScenarioMaintenance(pct) {
+  DSS_SCENARIO.maintenanceIncreasePct = (DSS_SCENARIO.maintenanceIncreasePct === pct) ? 0 : pct;
+  renderDSSPage();
+}
+function setDssScenarioMonitoring(pct) {
+  DSS_SCENARIO.monitoringIncreasePct = (DSS_SCENARIO.monitoringIncreasePct === pct) ? 0 : pct;
+  renderDSSPage();
+}
+function resetDssScenario() {
+  DSS_SCENARIO = {
+    survivalTargetPct: null, maintenanceIncreasePct: 0, monitoringIncreasePct: 0,
+    manualBudgetBDT: null, manualPlantationTarget: null, manualSurvivalPct: null,
+    manualAttritionRatePct: null, manualCarbonPriceBDTPerKg: null, manualCo2PerTreePerYearKg: null,
+    manualMonitoringPct: null, manualForecastYears: null, manualRiskMultiplier: null,
+  };
+  renderDSSPage();
+}
+function applyDssScenarioManual() {
+  function num(id) { var el = document.getElementById(id); if (!el || el.value === '') return null; var v = parseFloat(el.value); return isNaN(v) ? null : v; }
+  DSS_SCENARIO.manualSurvivalPct = num('dss-scn-survival');
+  DSS_SCENARIO.manualAttritionRatePct = num('dss-scn-attrition');
+  DSS_SCENARIO.manualBudgetBDT = num('dss-scn-budget');
+  DSS_SCENARIO.manualPlantationTarget = num('dss-scn-target');
+  DSS_SCENARIO.manualCarbonPriceBDTPerKg = num('dss-scn-carbonprice');
+  DSS_SCENARIO.manualCo2PerTreePerYearKg = num('dss-scn-co2');
+  DSS_SCENARIO.manualMonitoringPct = num('dss-scn-monitoring');
+  DSS_SCENARIO.manualForecastYears = num('dss-scn-years');
+  DSS_SCENARIO.manualRiskMultiplier = num('dss-scn-riskmult');
+  renderDSSPage();
+}
+function clearDssScenarioManual() {
+  DSS_SCENARIO.manualSurvivalPct = null; DSS_SCENARIO.manualAttritionRatePct = null;
+  DSS_SCENARIO.manualBudgetBDT = null; DSS_SCENARIO.manualPlantationTarget = null;
+  DSS_SCENARIO.manualCarbonPriceBDTPerKg = null; DSS_SCENARIO.manualCo2PerTreePerYearKg = null;
+  DSS_SCENARIO.manualMonitoringPct = null; DSS_SCENARIO.manualForecastYears = null;
+  DSS_SCENARIO.manualRiskMultiplier = null;
+  renderDSSPage();
+}
+function computeScenarioOutcome(kpis, budget) {
+  var cfg = getDssConfig();
+  var s = DSS_SCENARIO;
+  var simAlivePct = s.manualSurvivalPct !== null ? s.manualSurvivalPct : (s.survivalTargetPct !== null ? s.survivalTargetPct : kpis.survivalPct);
+  var simTotal = kpis.total + (s.manualPlantationTarget !== null ? s.manualPlantationTarget : 0);
+  var simAliveCount = simTotal * (simAlivePct / 100);
+  var simMonitoringPct = s.manualMonitoringPct !== null ? s.manualMonitoringPct : Math.min(100, kpis.monitoringCompletionPct + s.monitoringIncreasePct);
+  var attritionRatePct = s.manualAttritionRatePct !== null ? s.manualAttritionRatePct : cfg.survivalAttrition.assumedAnnualMortalityRatePct;
+  var simMaintenanceBDT = simAliveCount * cfg.budget.avgAnnualMaintenanceCostPerTreeBDT * (1 + s.maintenanceIncreasePct / 100);
+  var co2PerTreePerYearKg = s.manualCo2PerTreePerYearKg !== null ? s.manualCo2PerTreePerYearKg : cfg.carbonClimate.co2SequesteredPerTreePerYearKg;
+  var carbonPriceBDTPerKg = s.manualCarbonPriceBDTPerKg !== null ? s.manualCarbonPriceBDTPerKg : cfg.carbonClimate.socialCostOfCarbonBDTPerKg;
+  var simAnnualCO2Kg = simAliveCount * co2PerTreePerYearKg;
+  var simAnnualEnvValueBDT = simAnnualCO2Kg * carbonPriceBDTPerKg;
+  var effectiveBudgetBDT = s.manualBudgetBDT !== null ? s.manualBudgetBDT : budget.budgetUsed;
+  var simRoiPct = effectiveBudgetBDT > 0 ? (simAnnualEnvValueBDT / effectiveBudgetBDT * 100) : 0;
+  var forecastYears = s.manualForecastYears !== null ? s.manualForecastYears : (cfg.carbonClimate.forecastYears[0] || 5);
+  // A simplified flat-rate projection for the simulator only (current annual
+  // rate × years) — NOT the same age-based model Climate Intelligence uses,
+  // since this needs to react instantly to a manually-typed CO2/tree figure
+  // that may not match any real tree's actual age. Labeled as such in the UI.
+  var simProjectedCO2Kg = simAnnualCO2Kg * forecastYears;
+  var riskMultiplier = s.manualRiskMultiplier !== null ? s.manualRiskMultiplier : 1;
+  return {
+    simAlivePct: simAlivePct, simTotal: simTotal, simAliveCount: simAliveCount, simMonitoringPct: simMonitoringPct,
+    attritionRatePct: attritionRatePct, simMaintenanceBDT: simMaintenanceBDT, simAnnualCO2Kg: simAnnualCO2Kg,
+    effectiveBudgetBDT: effectiveBudgetBDT, simRoiPct: simRoiPct, forecastYears: forecastYears,
+    simProjectedCO2Kg: simProjectedCO2Kg, riskMultiplier: riskMultiplier,
+  };
+}
+function renderScenarioSimulator(kpis, budget) {
+  var el = document.getElementById('dss-scenario-section');
+  if (!el) return;
+  var cfg = getDssConfig();
+  var s = DSS_SCENARIO;
+  var out = computeScenarioOutcome(kpis, budget);
+  var activeBtn = 'background:#2d8a42;color:#fff;border-color:#2d8a42';
+  function pill(active) { return active ? activeBtn : ''; }
+  function mv(v) { return v === null ? '' : v; } // manual-value display helper for input value="..."
+  var rows = [
+    ['Total Trees (incl. Plantation Target)', kpis.total.toLocaleString(), Math.round(out.simTotal).toLocaleString()],
+    ['Survival %', Math.round(kpis.survivalPct) + '%', Math.round(out.simAlivePct) + '%'],
+    ['Alive Trees', kpis.alive.toLocaleString(), Math.round(out.simAliveCount).toLocaleString()],
+    ['Attrition Rate', cfg.survivalAttrition.assumedAnnualMortalityRatePct + '%/yr', out.attritionRatePct + '%/yr'],
+    ['Monitoring Completion', Math.round(kpis.monitoringCompletionPct) + '%', Math.round(out.simMonitoringPct) + '%'],
+    ['Annual Maintenance Cost', fmtBDT(kpis.alive * cfg.budget.avgAnnualMaintenanceCostPerTreeBDT), fmtBDT(out.simMaintenanceBDT)],
+    ['Annual Budget', fmtBDT(budget.budgetUsed), fmtBDT(out.effectiveBudgetBDT)],
+    ['Annual CO₂ Sequestration', fmtKg(kpis.alive * cfg.carbonClimate.co2SequesteredPerTreePerYearKg) + '/yr', fmtKg(out.simAnnualCO2Kg) + '/yr'],
+    ['Projected CO₂ (' + out.forecastYears + ' yr, simplified flat-rate)', '—', fmtKg(out.simProjectedCO2Kg)],
+  ];
+  // Same Admin-only rule as Budget Intelligence's ROI card — see there for why.
+  if (SESSION.role === 'admin') {
+    rows.push(['Estimated Annual ROI', (Math.round(budget.roiPct * 10) / 10) + '%', (Math.round(out.simRoiPct * 10) / 10) + '%']);
+  }
+  rows.push(['Risk Multiplier (illustrative only)', '1×', out.riskMultiplier + '×']);
+  el.innerHTML = '<div class="card" style="margin-bottom:14px">' +
+    '<div class="card-title"><span>🧪</span> Scenario Simulator <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:auto">Hypothetical — does not change any real data</span></div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+      '<span style="font-size:11px;color:#888;font-weight:700;align-self:center;margin-right:4px">Presets — Survival:</span>' +
+      '<button class="btn btn-sm" style="' + pill(s.survivalTargetPct === 85) + '" onclick="setDssScenarioSurvival(85)">Becomes 85%</button>' +
+      '<button class="btn btn-sm" style="' + pill(s.survivalTargetPct === 90) + '" onclick="setDssScenarioSurvival(90)">Becomes 90%</button>' +
+      '<button class="btn btn-sm" style="' + pill(s.survivalTargetPct === 95) + '" onclick="setDssScenarioSurvival(95)">Becomes 95%</button>' +
+      '<button class="btn btn-sm" style="' + pill(s.survivalTargetPct === 100) + '" onclick="setDssScenarioSurvival(100)">Replace All Dead Trees</button>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+      '<span style="font-size:11px;color:#888;font-weight:700;align-self:center;margin-right:4px">Maintenance:</span>' +
+      '<button class="btn btn-sm" style="' + pill(s.maintenanceIncreasePct === 10) + '" onclick="setDssScenarioMaintenance(10)">+10%</button>' +
+      '<button class="btn btn-sm" style="' + pill(s.maintenanceIncreasePct === 25) + '" onclick="setDssScenarioMaintenance(25)">+25%</button>' +
+      '<button class="btn btn-sm" style="' + pill(s.maintenanceIncreasePct === 50) + '" onclick="setDssScenarioMaintenance(50)">+50%</button>' +
+      '<span style="font-size:11px;color:#888;font-weight:700;align-self:center;margin:0 4px 0 10px">Monitoring:</span>' +
+      '<button class="btn btn-sm" style="' + pill(s.monitoringIncreasePct === 10) + '" onclick="setDssScenarioMonitoring(10)">+10pp</button>' +
+      '<button class="btn btn-sm" style="' + pill(s.monitoringIncreasePct === 20) + '" onclick="setDssScenarioMonitoring(20)">+20pp</button>' +
+      '<button class="btn btn-sm" style="' + pill(s.monitoringIncreasePct === 30) + '" onclick="setDssScenarioMonitoring(30)">+30pp</button>' +
+      '<button class="btn btn-sm" onclick="resetDssScenario()">↺ Reset Simulation</button>' +
+    '</div>' +
+    '<div style="margin-top:4px;padding-top:10px;border-top:1px dashed #ddd">' +
+      '<div style="font-size:11px;color:#888;font-weight:700;margin-bottom:6px">Or enter exact real-world values manually — these override the presets above wherever filled in:</div>' +
+      '<div class="form-grid" style="grid-template-columns:repeat(5,1fr)">' +
+        '<div class="fg"><label>Annual Budget (BDT)</label><input type="number" id="dss-scn-budget" placeholder="e.g. 6000000" value="' + mv(s.manualBudgetBDT) + '"></div>' +
+        '<div class="fg"><label>Plantation Target (+trees)</label><input type="number" id="dss-scn-target" placeholder="e.g. 500" value="' + mv(s.manualPlantationTarget) + '"></div>' +
+        '<div class="fg"><label>Survival Rate (%)</label><input type="number" id="dss-scn-survival" placeholder="e.g. 92" value="' + mv(s.manualSurvivalPct) + '"></div>' +
+        '<div class="fg"><label>Attrition Rate (%/yr)</label><input type="number" id="dss-scn-attrition" placeholder="e.g. 2.5" value="' + mv(s.manualAttritionRatePct) + '"></div>' +
+        '<div class="fg"><label>Carbon Price (BDT/kg)</label><input type="number" id="dss-scn-carbonprice" placeholder="e.g. 10" value="' + mv(s.manualCarbonPriceBDTPerKg) + '"></div>' +
+        '<div class="fg"><label>Carbon Sequestration (kg/tree/yr)</label><input type="number" id="dss-scn-co2" placeholder="e.g. 25" value="' + mv(s.manualCo2PerTreePerYearKg) + '"></div>' +
+        '<div class="fg"><label>Monitoring (%)</label><input type="number" id="dss-scn-monitoring" placeholder="e.g. 90" value="' + mv(s.manualMonitoringPct) + '"></div>' +
+        '<div class="fg"><label>Forecast Years</label><input type="number" id="dss-scn-years" placeholder="e.g. 8" value="' + mv(s.manualForecastYears) + '"></div>' +
+        '<div class="fg"><label>Risk Multiplier (×, illustrative)</label><input type="number" id="dss-scn-riskmult" step="0.1" placeholder="e.g. 1.2" value="' + mv(s.manualRiskMultiplier) + '"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px">' +
+        '<button class="btn btn-primary btn-sm" onclick="applyDssScenarioManual()">✅ Apply Manual Values</button>' +
+        '<button class="btn btn-sm" onclick="clearDssScenarioManual()">↺ Clear Manual Overrides</button>' +
+      '</div>' +
+    '</div>' +
+    '<table class="compare-table" style="margin-top:12px"><thead><tr><th>Metric</th><th>Current (Actual)</th><th>Simulated</th></tr></thead><tbody>' +
+    rows.map(function(r){ return '<tr><td>' + escapeHtml(r[0]) + '</td><td>' + r[1] + '</td><td><b style="color:#1976d2">' + r[2] + '</b></td></tr>'; }).join('') +
+    '</tbody></table>' +
+  '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Module: GIS Intelligence (Carbon / Risk / Survival / Budget heatmaps)
+// ════════════════════════════════════════════════════════════════════
+// A SEPARATE, independent Leaflet map instance (dssLeafletMap / #dss-leaflet-
+// map) — deliberately not reusing leafletMap/#leaflet-map from the existing
+// Map View page, so this can never affect that page (used by every role)
+// even if something here misbehaves. Uses Leaflet.heat (added alongside the
+// existing Leaflet script tag).
+var dssLeafletMap = null;
+var dssHeatLayer = null;
+var dssActiveHeatType = 'carbon';
+function initDssMapOnce() {
+  if (dssLeafletMap || !window.L || !document.getElementById('dss-leaflet-map')) return;
+  dssLeafletMap = L.map('dss-leaflet-map').setView([23.6850, 90.3563], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 18,
+  }).addTo(dssLeafletMap);
+  setTimeout(function(){ if (dssLeafletMap) dssLeafletMap.invalidateSize(); }, 150);
+}
+function computeCircleCentroids(recs) {
+  var groups = {};
+  recs.forEach(function(r) {
+    if (!r.div || !r.lat || !r.lon) return;
+    var lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+    if (isNaN(lat) || isNaN(lon)) return;
+    if (!groups[r.div]) groups[r.div] = { sumLat: 0, sumLon: 0, n: 0 };
+    groups[r.div].sumLat += lat; groups[r.div].sumLon += lon; groups[r.div].n++;
+  });
+  var out = {};
+  Object.keys(groups).forEach(function(k){ out[k] = { lat: groups[k].sumLat / groups[k].n, lon: groups[k].sumLon / groups[k].n }; });
+  return out;
+}
+function setDssHeatLayerType(type) {
+  dssActiveHeatType = type;
+  ['carbon','risk','survival','budget'].forEach(function(t) {
+    var btn = document.getElementById('dss-heat-btn-' + t);
+    if (btn) { btn.style.background = (t === type) ? '#2d8a42' : ''; btn.style.color = (t === type) ? '#fff' : ''; btn.style.borderColor = (t === type) ? '#2d8a42' : ''; }
+  });
+  renderDssGisLayer(dssRecords(), computeExecutiveKPIs(dssRecords()), computeCircleRiskAssessment(dssRecords()), computeRegionRankings(dssRecords(), function(r){ return r.div; }));
+}
+// Builds a Leaflet.heat gradient object (intensity 0-1 -> color) with sharp,
+// near-discrete transitions AT the exact cutoffs configured on the DSS
+// Configuration page — so the map's colors always match its own legend and
+// react immediately if an admin changes a threshold.
+function buildGisGradientBands(stopsAscending) {
+  // stopsAscending: [{ upTo, color }, ...] sorted ascending by upTo; the
+  // last stop's color also covers everything above it, up to 1.
+  var gradient = {};
+  var prevColor = stopsAscending[0].color;
+  gradient[0] = prevColor;
+  stopsAscending.forEach(function(s, i) {
+    var boundary = Math.max(0, Math.min(1, s.upTo));
+    gradient[boundary.toFixed(3)] = prevColor; // hold previous color right up to the boundary
+    var nextColor = stopsAscending[i + 1] ? stopsAscending[i + 1].color : s.color;
+    gradient[Math.min(1, boundary + 0.001).toFixed(3)] = nextColor; // then snap to the next band's color
+    prevColor = nextColor;
+  });
+  gradient[1] = prevColor;
+  return gradient;
+}
+var DSS_GIS_COLORS = { excellent: '#1a5c2a', good: '#43a047', moderate: '#fbc02d', low: '#f57c00', critical: '#c62828' };
+function buildGisGradient(type, cfg) {
+  if (type === 'carbon') {
+    var cb = cfg.gis.carbonBands; // higher intensity = better, per master spec's Carbon Density example
+    return buildGisGradientBands([
+      { upTo: cb.low, color: DSS_GIS_COLORS.critical },
+      { upTo: cb.moderate, color: DSS_GIS_COLORS.low },
+      { upTo: cb.good, color: DSS_GIS_COLORS.moderate },
+      { upTo: cb.excellent, color: DSS_GIS_COLORS.good },
+      { upTo: 1, color: DSS_GIS_COLORS.excellent },
+    ]);
+  }
+  if (type === 'risk' || type === 'budget') {
+    var bands = type === 'risk' ? cfg.gis.riskBands : cfg.gis.budgetBands; // higher intensity = worse here
+    return buildGisGradientBands([
+      { upTo: bands.low, color: DSS_GIS_COLORS.excellent },
+      { upTo: bands.medium, color: DSS_GIS_COLORS.moderate },
+      { upTo: bands.high, color: DSS_GIS_COLORS.low },
+      { upTo: 1, color: DSS_GIS_COLORS.critical },
+    ]);
+  }
+  return undefined; // survival/mortality: Leaflet.heat's default gradient (a plain density map, not banded)
+}
+// Visible legend + scale indicator (master spec Module F requirement) — one
+// per layer type, always reflecting whatever is currently configured, not a
+// fixed/hardcoded set of colors.
+function dssGisLegendHtml(type, cfg) {
+  var rows;
+  if (type === 'carbon') {
+    var cb = cfg.gis.carbonBands;
+    rows = [
+      { color: DSS_GIS_COLORS.excellent, label: 'Excellent (≥ ' + cb.excellent + ')' },
+      { color: DSS_GIS_COLORS.good, label: 'Good (≥ ' + cb.good + ')' },
+      { color: DSS_GIS_COLORS.moderate, label: 'Moderate (≥ ' + cb.moderate + ')' },
+      { color: DSS_GIS_COLORS.low, label: 'Low (≥ ' + cb.low + ')' },
+      { color: DSS_GIS_COLORS.critical, label: 'Critical (< ' + cb.low + ')' },
+    ];
+  } else if (type === 'risk' || type === 'budget') {
+    var bands = type === 'risk' ? cfg.gis.riskBands : cfg.gis.budgetBands;
+    rows = [
+      { color: DSS_GIS_COLORS.excellent, label: 'Low (≤ ' + bands.low + ')' },
+      { color: DSS_GIS_COLORS.moderate, label: 'Medium (≤ ' + bands.medium + ')' },
+      { color: DSS_GIS_COLORS.low, label: 'High (≤ ' + bands.high + ')' },
+      { color: DSS_GIS_COLORS.critical, label: 'Critical (> ' + bands.high + ')' },
+    ];
+  } else {
+    rows = [{ color: DSS_GIS_COLORS.critical, label: 'Dead-tree location density (darker = more clustered)' }];
+  }
+  var swatches = rows.map(function(r) {
+    return '<span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:' + r.color + ';display:inline-block;border:1px solid rgba(0,0,0,0.15)"></span>' + escapeHtml(r.label) + '</span>';
+  }).join('');
+  var scaleNote = type === 'survival'
+    ? 'Scale: raw point density (no configurable bands for this layer — it plots individual Dead-status trees directly).'
+    : 'Scale: 0 (sparse/low) → 1 (dense/high), normalized within the current filter selection. Thresholds above are editable on the DSS Configuration page → F. GIS Intelligence.';
+  return '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:11px;color:#555;margin-top:8px">' + swatches + '</div>' +
+    '<div style="font-size:10.5px;color:#aaa;margin-top:4px">' + scaleNote + '</div>';
+}
+function renderDssGisLayer(recs, kpis, circleRisks, circleRankings) {
+  if (!dssLeafletMap || !window.L || !window.L.heatLayer) return;
+  if (dssHeatLayer) { dssLeafletMap.removeLayer(dssHeatLayer); dssHeatLayer = null; }
+  var points = [];
+  var caption = '';
+  var anchor = dssLatestDateInRecords(recs);
+  var fullCfg = getDssConfig();
+  var cfg = fullCfg.carbonClimate;
+
+  if (dssActiveHeatType === 'carbon') {
+    recs.forEach(function(r) {
+      if (r.status !== 'Alive' || !r.lat || !r.lon) return;
+      var lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+      if (isNaN(lat) || isNaN(lon)) return;
+      var ageYears = Math.max(0, Math.min(cfg.assumedLifetimeYears, dssDaysBetween(r.date || anchor, anchor) / 365.25));
+      points.push([lat, lon, Math.min(1, 0.3 + ageYears / cfg.assumedLifetimeYears)]);
+    });
+    caption = 'Each point is a living tree, weighted by estimated carbon contribution (older trees glow hotter). ' + points.length.toLocaleString() + ' points plotted.';
+  } else if (dssActiveHeatType === 'survival') {
+    recs.forEach(function(r) {
+      if (r.status !== 'Dead' || !r.lat || !r.lon) return;
+      var lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+      if (isNaN(lat) || isNaN(lon)) return;
+      points.push([lat, lon, 1]);
+    });
+    caption = 'Mortality hotspots — each point is a Dead-status tree. Clusters indicate areas needing replacement/investigation. ' + points.length.toLocaleString() + ' points plotted.';
+  } else if (dssActiveHeatType === 'risk') {
+    var centroids = computeCircleCentroids(recs);
+    circleRisks.forEach(function(g) {
+      var c = centroids[g.name]; if (!c) return;
+      points.push([c.lat, c.lon, Math.min(1, g.riskScore / 6)]);
+    });
+    caption = 'One point per circle (at its recorded-plantings centroid), weighted by Risk Assessment score (0–6 categories triggered).';
+  } else if (dssActiveHeatType === 'budget') {
+    var centroids2 = computeCircleCentroids(recs);
+    var maxCost = Math.max(1, Math.max.apply(null, circleRankings.map(function(g){ return g.costPerTree; }).concat([0])));
+    circleRankings.forEach(function(g) {
+      var c = centroids2[g.name]; if (!c) return;
+      points.push([c.lat, c.lon, Math.min(1, g.costPerTree / maxCost)]);
+    });
+    caption = 'One point per circle, weighted by cost per tree (relative to the highest-cost circle currently in view).';
+  }
+
+  var gradient = buildGisGradient(dssActiveHeatType, fullCfg);
+  var heatOptions = { radius: dssActiveHeatType === 'carbon' || dssActiveHeatType === 'survival' ? 22 : 55, blur: 25, maxZoom: 12 };
+  if (gradient) heatOptions.gradient = gradient;
+  dssHeatLayer = L.heatLayer(points, heatOptions).addTo(dssLeafletMap);
+  var capEl = document.getElementById('dss-gis-caption');
+  if (capEl) capEl.textContent = caption + (points.length === 0 ? ' No plottable coordinates for the current filter/layer selection.' : '');
+  var legendEl = document.getElementById('dss-gis-legend');
+  if (legendEl) legendEl.innerHTML = dssGisLegendHtml(dssActiveHeatType, fullCfg);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Government Presentation Mode
+// ════════════════════════════════════════════════════════════════════
+// Large typography, minimal controls, suitable for a projector — toggled by
+// a body class so it's completely inert until explicitly turned on (see the
+// body.dss-presentation CSS rules). The floating exit button and Escape key
+// are BOTH always available so there is no way to get stuck with the
+// sidebar/navbar hidden and no way back.
+function toggleDssPresentationMode() {
+  document.body.classList.toggle('dss-presentation');
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.body.classList.contains('dss-presentation')) toggleDssPresentationMode();
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Executive PDF export — reuses this file's existing PDF conventions
+// (loadPdfFonts/registerPdfFont/stripBanglaForPdf, the green header banner,
+// the stat-box layout, doc.autoTable) from exportReportPDF(), rather than
+// inventing a new PDF style.
+// ════════════════════════════════════════════════════════════════════
+async function exportExecutiveDssPDF(btnEl) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('⚠️ PDF engine failed to load — please check your internet connection and try again.');
+    return;
+  }
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  var pageW = doc.internal.pageSize.getWidth();
+  var margin = 40;
+
+  var origBtnText = btnEl ? btnEl.innerHTML : null;
+  if (btnEl) { btnEl.innerHTML = '⏳ Preparing…'; btnEl.disabled = true; }
+  var fontOk = await loadPdfFonts();
+  if (btnEl) { btnEl.innerHTML = origBtnText; btnEl.disabled = false; }
+  var FONT = 'helvetica';
+  var txt = function(s){ return String(s); };
+  if (fontOk) { registerPdfFont(doc); FONT = PDF_FONT_NAME; } else { txt = stripBanglaForPdf; }
+  doc.setFont(FONT, 'normal');
+
+  var scoped = dssRecords();
+  var kpis = computeExecutiveKPIs(scoped);
+  var health = computeEnvironmentalPerformanceIndex(kpis);
+  var circleRisks = computeCircleRiskAssessment(scoped);
+  var alerts = computeSmartAlerts(scoped, kpis, circleRisks);
+  var districtRankings = computeRegionRankings(scoped, function(r){ return r.dis; });
+  var recs = computeExecutiveRecommendations(circleRisks, districtRankings, alerts, kpis);
+  var climate = computeClimateIntelligence(scoped);
+  var budget = computeBudgetIntelligence(scoped, kpis, climate);
+  var tableFontStyles = { font: FONT };
+
+  doc.setFillColor(26, 92, 42);
+  doc.rect(0, 0, pageW, 70, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16); doc.setFont(FONT, 'bold');
+  doc.text(txt('Executive Decision Support Summary'), margin, 32);
+  doc.setFontSize(10); doc.setFont(FONT, 'normal');
+  doc.text('Department of Public Health Engineering — Bangladesh · Generated ' + new Date().toISOString().slice(0, 10), margin, 50);
+
+  doc.setTextColor(30, 30, 30);
+  var startY = 90;
+  var stats = [
+    ['Total Trees', kpis.total.toLocaleString()], ['Alive', kpis.alive.toLocaleString()], ['Dead', kpis.dead.toLocaleString()],
+    ['Survival %', Math.round(kpis.survivalPct) + '%'], ['Monitoring %', Math.round(kpis.monitoringCompletionPct) + '%'],
+    ['Env. Performance Index', Math.round(health.score) + '/100 (' + health.band + ')'],
+  ];
+  var boxW = (pageW - margin * 2 - 5 * 8) / 6;
+  stats.forEach(function(s, i) {
+    var x = margin + i * (boxW + 8);
+    doc.setDrawColor(200, 220, 200); doc.setFillColor(248, 253, 248);
+    doc.roundedRect(x, startY, boxW, 46, 4, 4, 'FD');
+    doc.setFontSize(7.5); doc.setTextColor(120, 120, 120); doc.setFont(FONT, 'normal');
+    doc.text(s[0], x + 6, startY + 16, { maxWidth: boxW - 12 });
+    doc.setFontSize(10.5); doc.setTextColor(26, 92, 42); doc.setFont(FONT, 'bold');
+    doc.text(txt(s[1]), x + 6, startY + 34, { maxWidth: boxW - 12 });
+    doc.setFont(FONT, 'normal');
+  });
+
+  doc.autoTable({
+    startY: startY + 64, margin: { left: margin, right: margin },
+    head: [['Smart Alert', 'Detail']],
+    body: alerts.length ? alerts.map(function(a){ return [txt('[' + a.severity + '] ' + a.title), txt(a.detail)]; }) : [['—', 'No active alerts']],
+    headStyles: Object.assign({ fillColor: [198, 40, 40], textColor: 255, fontSize: 9 }, tableFontStyles),
+    bodyStyles: Object.assign({ fontSize: 8.5 }, tableFontStyles), theme: 'grid', styles: tableFontStyles,
+  });
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 16, margin: { left: margin, right: margin },
+    head: [['#', 'Recommendation', 'Priority', 'Reason']],
+    body: recs.length ? recs.map(function(r, i){ return [String(i + 1), txt(r.title), r.priority, txt(r.reason)]; }) : [['—', 'No recommendations for current data', '', '']],
+    headStyles: Object.assign({ fillColor: [26, 92, 42], textColor: 255, fontSize: 9 }, tableFontStyles),
+    bodyStyles: Object.assign({ fontSize: 8 }, tableFontStyles), theme: 'grid', styles: tableFontStyles,
+  });
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 16, margin: { left: margin, right: margin },
+    head: [['Budget & Climate Intelligence', 'Value']],
+    body: (function(){
+      var rows = [['Budget Used', fmtBDT(budget.budgetUsed)]];
+      // Admin-only, same reasoning as Budget Intelligence's on-screen cards —
+      // totalAllocated is a single NATIONAL figure, only meaningful against
+      // Admin's national-scope budgetUsed.
+      if (SESSION.role === 'admin') {
+        rows.push(['Budget Remaining', fmtBDT(budget.budgetRemaining) + ' of ' + fmtBDT(budget.totalAllocated)]);
+      }
+      rows.push(
+        ['Cost per Alive Tree', fmtBDT(budget.costPerAliveTree)],
+        ['Cost per Dead Tree', fmtBDT(budget.costPerDeadTree)]
+      );
+      if (SESSION.role === 'admin') {
+        rows.push(['Estimated Annual ROI (climate-only)', (Math.round(budget.roiPct * 10) / 10) + '%']);
+      }
+      rows.push(
+        ['Annual CO2 Sequestration', fmtKg(climate.annualCO2Kg) + '/yr'],
+        ['CO2 Removed to Date', fmtKg(climate.cumulativeCO2Kg)],
+        ['Carbon Lost — Dead Trees (lifetime potential)', fmtKg(climate.carbonLostDeadKg)]
+      );
+      return rows;
+    })(),
+    headStyles: Object.assign({ fillColor: [25, 118, 210], textColor: 255, fontSize: 9 }, tableFontStyles),
+    bodyStyles: Object.assign({ fontSize: 8.5 }, tableFontStyles), theme: 'grid', styles: tableFontStyles,
+  });
+
+  doc.save('DPHE_Executive_DSS_Summary_' + new Date().toISOString().slice(0, 10) + '.pdf');
 }
 
 function costSum(recs) {
@@ -6115,7 +8123,7 @@ function renderRecords() {
     '<td>'+escapeHtml(r.species)+'</td>' +
     '<td><span style="font-size:11px;background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:20px">'+escapeHtml(r.cat)+'</span></td>' +
     '<td><b style="color:#1a5c2a">'+totalPlanted+'</b></td>' +
-    '<td style="font-weight:600;color:#6a1b9a">৳ '+Math.round(parseFloat(r.cost)||0).toLocaleString()+'</td>' +
+    '<td style="font-weight:600;color:#6a1b9a">BDT '+Math.round(parseFloat(r.cost)||0).toLocaleString()+'</td>' +
     '<td><span class="status-pill '+statusClass(r.status)+'">'+statusLabel(r.status)+'</span></td>' +
     '<td style="white-space:nowrap">' +
     '<button class="btn btn-sm" onclick="viewRecord(\''+r.id+'\')" style="font-size:11px;padding:3px 8px;margin-right:3px">👁 View</button>' +
@@ -6645,11 +8653,22 @@ function showPage(id, el) {
   // Permission check
   var permMap = {
     'add-tree':'add','monitoring':'monitoring','records':'records',
-    'map':'map','species':'species','reports':'reports','users':'users'
+    'map':'map','species':'species','reports':'reports','users':'users',
+    'dss':'dss'
   };
   var required = permMap[id];
   if (required && !hasPerm(required)) {
     alert('⛔ অ্যাক্সেস নেই।\n\nআপনার এই মডিউলটি অ্যাক্সেস করার অনুমতি নেই।');
+    return;
+  }
+  // Executive DSS viewing is now open to every role — Circle/District/Upazila
+  // see it scoped to their own jurisdiction's data (records are already
+  // filtered server-side per role — see actionGetAll). DSS Configuration
+  // (editing the underlying thresholds/assumptions) stays a hard HQ-Admin-only
+  // gate, independent of the editable perm system — the backend enforces
+  // this too (actionSaveDssConfig).
+  if (id === 'dss-config' && SESSION.role !== 'admin') {
+    alert('⛔ অ্যাক্সেস নেই।\n\nDSS Configuration (editing) is available to HQ Admin only.');
     return;
   }
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
@@ -6664,6 +8683,8 @@ function showPage(id, el) {
   if (id==='species') { renderSpeciesTable(); }
   if (id==='dashboard') { initDashboard(); }
   if (id==='reports') { renderReportsPage(); }
+  if (id==='dss') { renderDSSPage(); syncDssConfigFromBackend().then(function(){ renderDSSPage(); }); }
+  if (id==='dss-config') { renderDssConfigPage(); syncDssConfigFromBackend(); }
   if (id==='users') { updateBackupCardVisibility(); }
   applyFieldPermissions();
 }
