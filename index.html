@@ -1482,8 +1482,7 @@ body.dss-presentation #dss-exit-presentation-btn { display:block; }
 <div id="visit-history-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;max-width:560px;margin:40px auto;padding:24px;position:relative">
     <div style="font-size:16px;font-weight:700;color:#1a5c2a;margin-bottom:4px">📋 Visit History</div>
-    <div id="visit-history-tree-info" style="font-size:12px;color:#888;margin-bottom:8px"></div>
-    <div id="visit-history-directions" style="margin-bottom:14px"></div>
+    <div id="visit-history-tree-info" style="font-size:12px;color:#888;margin-bottom:14px"></div>
     <div id="visit-history-body" style="max-height:420px;overflow-y:auto"></div>
     <div class="btn-row" style="margin-top:16px">
       <button class="btn btn-primary" onclick="document.getElementById('visit-history-modal').style.display='none';currentMonRecordId=null;">Close</button>
@@ -3050,10 +3049,14 @@ function buildMonRow(r) {
     '<span style="font-size:18px;font-weight:700;color:' + (visits.length>0?'#2d8a42':'#bbb') + '">' + visits.length + '</span>' +
     '<div style="font-size:10px;color:#888">visits</div></div>';
 
-  // History button
-  var historyCell = visits.length > 0
+  // History button + direct directions button (kept outside the modal so it
+  // is reachable in one tap straight from the table row)
+  var historyCell = (visits.length > 0
     ? '<button onclick="showVisitHistory(\'' + r.id + '\')" style="padding:4px 10px;border-radius:6px;border:1.5px solid #1976d2;color:#1565c0;background:#e3f2fd;font-size:11px;cursor:pointer;font-weight:600">📋 View</button>'
-    : '<span style="font-size:10px;color:#bbb">No history</span>';
+    : '<span style="font-size:10px;color:#bbb">No history</span>') +
+    (r.lat && r.lon
+      ? '<button onclick="openTreeDirections(\'' + r.lat + '\',\'' + r.lon + '\')" style="display:block;margin-top:5px;padding:4px 10px;border-radius:6px;border:1.5px solid #2d8a42;color:#1a5c2a;background:#e8f5e9;font-size:11px;cursor:pointer;font-weight:600">🧭 Directions</button>'
+      : '');
 
   // New report button or locked
   var reportCell = dead
@@ -3106,12 +3109,6 @@ function showVisitHistory(rid) {
   if (!r) return;
   var visits = (r.monitoring || []).slice().sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
   document.getElementById('visit-history-tree-info').textContent = r.id + ' — ' + r.species + ' | ' + r.site;
-  var dirEl = document.getElementById('visit-history-directions');
-  if (dirEl) {
-    dirEl.innerHTML = (r.lat && r.lon)
-      ? '<button class="btn btn-sm btn-primary" onclick="openTreeDirections(\'' + r.lat + '\',\'' + r.lon + '\')" style="font-size:11px;padding:6px 14px">🧭 Get Directions | দিক নির্দেশনা</button>'
-      : '<span style="font-size:11px;color:#aaa">📍 GPS location not recorded for this tree | এই গাছের জিপিএস অবস্থান নেই</span>';
-  }
   var html = visits.length === 0
     ? '<p style="color:#aaa;text-align:center;padding:20px">কোনো পরিদর্শন রেকর্ড নেই।</p>'
     : visits.map(function(v, i) {
